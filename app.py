@@ -1,11 +1,32 @@
 from flask import Flask, render_template, request, jsonify
 import re
 import os
+import sys
+import webbrowser
+from threading import Timer
 
-app = Flask(__name__)
+# 获取资源路径（支持打包后的环境）
+def resource_path(relative_path):
+    """获取资源的绝对路径，支持打包后的临时目录"""
+    try:
+        # PyInstaller 创建的临时文件夹路径
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+app = Flask(__name__, 
+            template_folder=resource_path('templates'))
 
 WORDS_PER_PAGE = 1000  # 每次加载字数
-NOVEL_FOLDER = "novel"  # 小说文件夹
+
+# 小说文件夹路径（从exe同目录读取）
+if getattr(sys, 'frozen', False):
+    # 打包后：从exe同目录读取
+    NOVEL_FOLDER = os.path.join(os.path.dirname(sys.executable), "novel")
+else:
+    # 开发环境
+    NOVEL_FOLDER = "novel"
 
 def get_novels():
     """获取所有小说文件列表"""
@@ -108,6 +129,19 @@ def api_chapter():
         "next_chapter_title": chapters[idx + 1]["title"] if has_next_chapter else None
     })
 
+def open_browser():
+    """自动打开浏览器"""
+    webbrowser.open('http://127.0.0.1:5000')
+
 if __name__ == "__main__":
-    app.run(debug=True)
-    #http://127.0.0.1:5000
+    # 1.5秒后自动打开浏览器
+    Timer(1.5, open_browser).start()
+    
+    print("=" * 50)
+    print("📖 小说阅读器已启动")
+    print("🌐 访问地址: http://127.0.0.1:5000")
+    print("📁 小说文件夹:", NOVEL_FOLDER)
+    print("❌ 按 Ctrl+C 退出")
+    print("=" * 50)
+    
+    app.run(debug=False, port=5000)
