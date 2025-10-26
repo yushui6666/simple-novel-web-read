@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>📖 小说阅读器</title>
+  <style>
+    body {
+      font-family: "微软雅黑", sans-serif;
+      line-height: 1.8;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      transition: background 0.3s, color 0.3s;
+      background: #f9f9f9;
+      color: #333;
+    }
+
+    .dark {
+      background: #1e1e1e;
+      color: #ddd;
+    }
+
+    #content {
+      white-space: pre-wrap;
+      font-size: 18px;
+      margin-top: 80px;
+      padding-bottom: 100px;
+    }
+
+    .chapter-block {
+      margin-bottom: 40px;
+    }
+
+    .chapter-block h3 {
+      color: #007bff;
+      border-bottom: 2px solid #007bff;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+
+    .dark .chapter-block h3 {
+      color: #4a9eff;
+      border-bottom-color: #4a9eff;
+    }
+
+    #controls {
+      position: fixed;
+      top: 80px;
+      right: 10px;
+      background: rgba(255,255,255,0.9);
+      border-radius: 10px;
+      padding: 8px;
+      display: flex;
+      gap: 10px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.2);
+      z-index: 20;
+    }
+
+    .dark #controls {
+      background: rgba(40,40,40,0.9);
+    }
+
+    #menuBar {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 30;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    select {
+      font-size: 16px;
+      padding: 5px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      background: white;
+      cursor: pointer;
+    }
+
+    .dark select {
+      background: #2a2a2a;
+      color: #ddd;
+      border-color: #555;
+    }
+
+    button {
+      padding: 6px 10px;
+      border: none;
+      border-radius: 6px;
+      background: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #0056b3;
+    }
+
+    #loadingIndicator {
+      text-align: center;
+      padding: 20px;
+      color: #999;
+      font-style: italic;
+    }
+
+    #pageInfo {
+      position: fixed;
+      bottom: 70px;
+      right: 20px;
+      background: rgba(0,123,255,0.9);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      z-index: 25;
+    }
+
+    .dark #pageInfo {
+      background: rgba(74,158,255,0.9);
+    }
+
+    /* 新增：进度显示 */
+    #progressInfo {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(40,167,69,0.9);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      z-index: 25;
+      display: none;
+    }
+
+    .dark #progressInfo {
+      background: rgba(52,199,89,0.9);
+    }
+
+    /* 进度条 */
+    #progressBar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: rgba(0,0,0,0.1);
+      z-index: 40;
+    }
+
+    #progressBarFill {
+      height: 100%;
+      background: linear-gradient(90deg, #007bff, #00c851);
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    .dark #progressBar {
+      background: rgba(255,255,255,0.1);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 进度条 -->
+  <div id="progressBar">
+    <div id="progressBarFill"></div>
+  </div>
+
+  <div id="menuBar">
+    <select id="novelSelect">
+      <option value="">📚 选择小说</option>
+      {% for novel in novels %}
+        <option value="{{ novel.filename }}">{{ novel.name }}</option>
+      {% endfor %}
+    </select>
+    <select id="chapterSelect" disabled>
+      <option value="">📖 选择章节</option>
+    </select>
+  </div>
+
+  <div id="controls">
+    <button id="fontMinus">A-</button>
+    <button id="fontPlus">A+</button>
+    <button id="toggleMode">🌙 夜间</button>
+  </div>
+
+  <div id="content"></div>
+  <div id="loadingIndicator" style="display:none;">加载中...</div>
+  <div id="pageInfo"></div>
+  <div id="progressInfo"></div>
+
+  <script>
+    const novelSelect = document.getElementById("novelSelect");
+    const chapterSelect = document.getElementById("chapterSelect");
+    const contentDiv = document.getElementById("content");
+    const pageInfo = document.getElementById("pageInfo");
+    const progressInfo = document.getElementById("progressInfo");
+    const progressBarFill = document.getElementById("progressBarFill");
+    const loadingIndicator = document.getElementById("loadingIndicator");
+    const fontMinus = document.getElementById("fontMinus");
+    const fontPlus = document.getElementById("fontPlus");
+    const toggleMode = document.getElementById("toggleMode");
+
+    let currentNovel = localStorage.getItem("currentNovel") || "";
+    let currentChapter = -1;
+    let currentPage = 1;
+    let totalPages = 1;
+    let totalChapters = 0;
+    let loading = false;
+    let fontSize = parseInt(localStorage.getItem("fontSize") || "18");
+    let isDark = localStorage.getItem("darkMode") === "true";
+    let hasNextChapter = false;
+    let autoLoadEnabled = true;
+
+    // 初始化样式
+    contentDiv.style.fontSize = fontSize + "px";
+    if (isDark) document.body.classList.add("dark");
+    toggleMode.textContent = isDark ? "☀️ 日间" : "🌙 夜间";
+
+    // 更新进度显示
+    function updateProgress() {
+      if (totalChapters === 0 || currentChapter < 0) {
+        progressInfo.style.display = "none";
+        progressBarFill.style.width = "0%";
+        return;
+      }
+
+      // 计算阅读进度（当前章节 / 总章节 * 100）
+      const progress = ((currentChapter + 1) / totalChapters * 100).toFixed(1);
+      const remaining = (100 - progress).toFixed(1);
+      
+      progressInfo.style.display = "block";
+      progressInfo.textContent = `📊 已读 ${progress}% | 剩余 ${remaining}%`;
+      progressBarFill.style.width = progress + "%";
+    }
+
+    // 加载章节列表
+    async function loadChapters(novel) {
+      if (!novel) return;
+      
+      try {
+        const res = await fetch(`/api/chapters?novel=${encodeURIComponent(novel)}`);
+        const data = await res.json();
+        
+        chapterSelect.innerHTML = '<option value="">📖 选择章节</option>';
+        data.chapters.forEach((title, idx) => {
+          const option = document.createElement("option");
+          option.value = idx;
+          option.textContent = title;
+          chapterSelect.appendChild(option);
+        });
+        
+        chapterSelect.disabled = false;
+        currentNovel = novel;
+        totalChapters = data.total_chapters || data.chapters.length;
+        localStorage.setItem("currentNovel", novel);
+        
+        // 尝试恢复上次阅读的章节
+        const savedChapter = parseInt(localStorage.getItem(`chapter_${novel}`) || "-1");
+        if (savedChapter >= 0 && savedChapter < data.chapters.length) {
+          currentChapter = savedChapter;
+          chapterSelect.value = savedChapter;
+          pageInfo.textContent = `上次读到：${data.chapters[savedChapter]}`;
+          updateProgress();
+        } else {
+          pageInfo.textContent = "请选择章节开始阅读 📖";
+          progressInfo.style.display = "none";
+        }
+      } catch (err) {
+        console.error("加载章节失败:", err);
+        pageInfo.textContent = "⚠️ 加载章节列表失败";
+      }
+    }
+
+    // 加载章节内容
+    async function loadChapter(chapter, page=1, append=false) {
+      if (loading || !currentNovel) return;
+      loading = true;
+      loadingIndicator.style.display = "block";
+
+      try {
+        const res = await fetch(`/api/chapter?novel=${encodeURIComponent(currentNovel)}&id=${chapter}&page=${page}`);
+        const data = await res.json();
+
+        if (!append) {
+          contentDiv.innerHTML = "";
+          currentPage = 0;
+        }
+
+        const block = document.createElement("div");
+        block.className = "chapter-block";
+        
+        // 只在新章节第一页显示标题
+        if (page === 1) {
+          block.innerHTML = `<h3>${data.title}</h3>\n\n${data.content}`;
+        } else {
+          block.innerHTML = data.content;
+        }
+        
+        contentDiv.appendChild(block);
+
+        currentChapter = chapter;
+        currentPage = data.page;
+        totalPages = data.total_pages;
+        hasNextChapter = data.has_next_chapter;
+        totalChapters = data.total_chapters || totalChapters;
+
+        localStorage.setItem(`chapter_${currentNovel}`, chapter);
+
+        updatePageInfo(data.title);
+        updateProgress();
+      } catch (err) {
+        console.error("加载失败:", err);
+        pageInfo.textContent = "⚠️ 加载失败，请重试";
+      } finally {
+        loading = false;
+        loadingIndicator.style.display = "none";
+      }
+    }
+
+    // 更新页面信息
+    function updatePageInfo(title) {
+      let info = `📖 ${title}`;
+      if (totalPages > 1) {
+        info += ` (第 ${currentPage}/${totalPages} 页)`;
+      }
+      if (hasNextChapter && currentPage === totalPages) {
+        info += " - 继续滚动加载下一章";
+      }
+      pageInfo.textContent = info;
+    }
+
+    // 小说选择
+    novelSelect.onchange = () => {
+      const novel = novelSelect.value;
+      if (!novel) return;
+      
+      contentDiv.innerHTML = "";
+      currentChapter = -1;
+      totalChapters = 0;
+      loadChapters(novel);
+    };
+
+    // 章节选择
+    chapterSelect.onchange = () => {
+      const idx = parseInt(chapterSelect.value);
+      if (isNaN(idx)) return;
+      loadChapter(idx, 1, false);
+      window.scrollTo(0, 0);
+    };
+
+    // 滚动加载
+    window.addEventListener("scroll", () => {
+      if (!autoLoadEnabled || loading || currentChapter < 0) return;
+      
+      const scrollBottom = window.innerHeight + window.scrollY;
+      const documentHeight = document.body.offsetHeight;
+      
+      // 距离底部200px时触发加载
+      if (scrollBottom >= documentHeight - 200) {
+        if (currentPage < totalPages) {
+          // 加载当前章节的下一页
+          loadChapter(currentChapter, currentPage + 1, true);
+        } else if (hasNextChapter) {
+          // 加载下一章节
+          const nextChapter = currentChapter + 1;
+          loadChapter(nextChapter, 1, true);
+          
+          // 更新下拉框选择
+          chapterSelect.value = nextChapter;
+        }
+      }
+    });
+
+    // 字号调节
+    fontMinus.onclick = () => {
+      fontSize = Math.max(12, fontSize - 2);
+      contentDiv.style.fontSize = fontSize + "px";
+      localStorage.setItem("fontSize", fontSize);
+    };
+    
+    fontPlus.onclick = () => {
+      fontSize = Math.min(36, fontSize + 2);
+      contentDiv.style.fontSize = fontSize + "px";
+      localStorage.setItem("fontSize", fontSize);
+    };
+
+    // 夜间模式
+    toggleMode.onclick = () => {
+      document.body.classList.toggle("dark");
+      isDark = document.body.classList.contains("dark");
+      localStorage.setItem("darkMode", isDark);
+      toggleMode.textContent = isDark ? "☀️ 日间" : "🌙 夜间";
+    };
+
+    // 初始化
+    if (currentNovel) {
+      novelSelect.value = currentNovel;
+      loadChapters(currentNovel);
+    } else {
+      pageInfo.textContent = "请选择小说开始阅读 📚";
+    }
+  </script>
+
+</body>
+</html>
