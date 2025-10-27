@@ -11,13 +11,42 @@
       margin: 0 auto;
       padding: 20px;
       transition: background 0.3s, color 0.3s;
+    }
+
+    /* 默认浅色主题 */
+    body.light {
       background: #f9f9f9;
       color: #333;
     }
 
-    .dark {
+    /* 深色主题 */
+    body.dark {
       background: #1e1e1e;
       color: #ddd;
+    }
+
+    /* 护眼绿 */
+    body.green {
+      background: #c7edcc;
+      color: #2d4a2b;
+    }
+
+    /* 羊皮纸 */
+    body.parchment {
+      background: #f4ecd8;
+      color: #5c4a2c;
+    }
+
+    /* 护眼米黄 */
+    body.beige {
+      background: #e8dcc4;
+      color: #4a3f2e;
+    }
+
+    /* 夜间蓝 */
+    body.night-blue {
+      background: #1a2332;
+      color: #c9d1d9;
     }
 
     #content {
@@ -38,9 +67,29 @@
       margin-bottom: 20px;
     }
 
-    .dark .chapter-block h3 {
+    body.dark .chapter-block h3 {
       color: #4a9eff;
       border-bottom-color: #4a9eff;
+    }
+
+    body.green .chapter-block h3 {
+      color: #2d7a3e;
+      border-bottom-color: #2d7a3e;
+    }
+
+    body.parchment .chapter-block h3 {
+      color: #8b6f47;
+      border-bottom-color: #8b6f47;
+    }
+
+    body.beige .chapter-block h3 {
+      color: #7a6446;
+      border-bottom-color: #7a6446;
+    }
+
+    body.night-blue .chapter-block h3 {
+      color: #58a6ff;
+      border-bottom-color: #58a6ff;
     }
 
     #controls {
@@ -56,8 +105,20 @@
       z-index: 20;
     }
 
-    .dark #controls {
+    body.dark #controls, body.night-blue #controls {
       background: rgba(40,40,40,0.9);
+    }
+
+    body.green #controls {
+      background: rgba(199,237,204,0.95);
+    }
+
+    body.parchment #controls {
+      background: rgba(244,236,216,0.95);
+    }
+
+    body.beige #controls {
+      background: rgba(232,220,196,0.95);
     }
 
     #menuBar {
@@ -79,10 +140,28 @@
       cursor: pointer;
     }
 
-    .dark select {
+    body.dark select, body.night-blue select {
       background: #2a2a2a;
       color: #ddd;
       border-color: #555;
+    }
+
+    body.green select {
+      background: #b5e3bb;
+      color: #2d4a2b;
+      border-color: #7ab583;
+    }
+
+    body.parchment select {
+      background: #ede3cb;
+      color: #5c4a2c;
+      border-color: #c9b896;
+    }
+
+    body.beige select {
+      background: #ddd1b3;
+      color: #4a3f2e;
+      border-color: #b8a887;
     }
 
     button {
@@ -118,11 +197,6 @@
       z-index: 25;
     }
 
-    .dark #pageInfo {
-      background: rgba(74,158,255,0.9);
-    }
-
-    /* 新增：进度显示 */
     #progressInfo {
       position: fixed;
       bottom: 20px;
@@ -137,11 +211,6 @@
       display: none;
     }
 
-    .dark #progressInfo {
-      background: rgba(52,199,89,0.9);
-    }
-
-    /* 进度条 */
     #progressBar {
       position: fixed;
       top: 0;
@@ -158,15 +227,10 @@
       transition: width 0.3s ease;
       width: 0%;
     }
-
-    .dark #progressBar {
-      background: rgba(255,255,255,0.1);
-    }
   </style>
 </head>
-<body>
+<body class="light">
 
-  <!-- 进度条 -->
   <div id="progressBar">
     <div id="progressBarFill"></div>
   </div>
@@ -174,9 +238,6 @@
   <div id="menuBar">
     <select id="novelSelect">
       <option value="">📚 选择小说</option>
-      {% for novel in novels %}
-        <option value="{{ novel.filename }}">{{ novel.name }}</option>
-      {% endfor %}
     </select>
     <select id="chapterSelect" disabled>
       <option value="">📖 选择章节</option>
@@ -186,7 +247,7 @@
   <div id="controls">
     <button id="fontMinus">A-</button>
     <button id="fontPlus">A+</button>
-    <button id="toggleMode">🌙 夜间</button>
+    <button id="toggleMode">🎨 主题</button>
   </div>
 
   <div id="content"></div>
@@ -213,14 +274,27 @@
     let totalChapters = 0;
     let loading = false;
     let fontSize = parseInt(localStorage.getItem("fontSize") || "18");
-    let isDark = localStorage.getItem("darkMode") === "true";
-    let hasNextChapter = false;
     let autoLoadEnabled = true;
+
+    // 主题配置
+    const themes = [
+      { name: 'light', label: '☀️ 日间', icon: '☀️' },
+      { name: 'dark', label: '🌙 夜间', icon: '🌙' },
+      { name: 'green', label: '🍃 护眼绿', icon: '🍃' },
+      { name: 'parchment', label: '📜 羊皮纸', icon: '📜' },
+      { name: 'beige', label: '🌾 米黄', icon: '🌾' },
+      { name: 'night-blue', label: '🌃 夜蓝', icon: '🌃' }
+    ];
+    
+    let currentThemeIndex = 0;
+    const savedTheme = localStorage.getItem("theme") || "light";
+    currentThemeIndex = themes.findIndex(t => t.name === savedTheme);
+    if (currentThemeIndex === -1) currentThemeIndex = 0;
 
     // 初始化样式
     contentDiv.style.fontSize = fontSize + "px";
-    if (isDark) document.body.classList.add("dark");
-    toggleMode.textContent = isDark ? "☀️ 日间" : "🌙 夜间";
+    document.body.className = themes[currentThemeIndex].name;
+    toggleMode.textContent = themes[currentThemeIndex].icon + " 主题";
 
     // 更新进度显示
     function updateProgress() {
@@ -230,7 +304,6 @@
         return;
       }
 
-      // 计算阅读进度（当前章节 / 总章节 * 100）
       const progress = ((currentChapter + 1) / totalChapters * 100).toFixed(1);
       const remaining = (100 - progress).toFixed(1);
       
@@ -260,7 +333,6 @@
         totalChapters = data.total_chapters || data.chapters.length;
         localStorage.setItem("currentNovel", novel);
         
-        // 尝试恢复上次阅读的章节
         const savedChapter = parseInt(localStorage.getItem(`chapter_${novel}`) || "-1");
         if (savedChapter >= 0 && savedChapter < data.chapters.length) {
           currentChapter = savedChapter;
@@ -295,7 +367,6 @@
         const block = document.createElement("div");
         block.className = "chapter-block";
         
-        // 只在新章节第一页显示标题
         if (page === 1) {
           block.innerHTML = `<h3>${data.title}</h3>\n\n${data.content}`;
         } else {
@@ -307,12 +378,12 @@
         currentChapter = chapter;
         currentPage = data.page;
         totalPages = data.total_pages;
-        hasNextChapter = data.has_next_chapter;
+        const hasNextChapter = data.has_next_chapter;
         totalChapters = data.total_chapters || totalChapters;
 
         localStorage.setItem(`chapter_${currentNovel}`, chapter);
 
-        updatePageInfo(data.title);
+        updatePageInfo(data.title, hasNextChapter);
         updateProgress();
       } catch (err) {
         console.error("加载失败:", err);
@@ -324,7 +395,7 @@
     }
 
     // 更新页面信息
-    function updatePageInfo(title) {
+    function updatePageInfo(title, hasNextChapter) {
       let info = `📖 ${title}`;
       if (totalPages > 1) {
         info += ` (第 ${currentPage}/${totalPages} 页)`;
@@ -361,18 +432,15 @@
       const scrollBottom = window.innerHeight + window.scrollY;
       const documentHeight = document.body.offsetHeight;
       
-      // 距离底部200px时触发加载
       if (scrollBottom >= documentHeight - 200) {
         if (currentPage < totalPages) {
-          // 加载当前章节的下一页
           loadChapter(currentChapter, currentPage + 1, true);
-        } else if (hasNextChapter) {
-          // 加载下一章节
+        } else {
           const nextChapter = currentChapter + 1;
-          loadChapter(nextChapter, 1, true);
-          
-          // 更新下拉框选择
-          chapterSelect.value = nextChapter;
+          if (nextChapter < totalChapters) {
+            loadChapter(nextChapter, 1, true);
+            chapterSelect.value = nextChapter;
+          }
         }
       }
     });
@@ -390,12 +458,13 @@
       localStorage.setItem("fontSize", fontSize);
     };
 
-    // 夜间模式
+    // 主题切换
     toggleMode.onclick = () => {
-      document.body.classList.toggle("dark");
-      isDark = document.body.classList.contains("dark");
-      localStorage.setItem("darkMode", isDark);
-      toggleMode.textContent = isDark ? "☀️ 日间" : "🌙 夜间";
+      currentThemeIndex = (currentThemeIndex + 1) % themes.length;
+      const theme = themes[currentThemeIndex];
+      document.body.className = theme.name;
+      toggleMode.textContent = theme.icon + " 主题";
+      localStorage.setItem("theme", theme.name);
     };
 
     // 初始化
