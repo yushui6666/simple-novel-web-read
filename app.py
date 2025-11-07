@@ -153,7 +153,68 @@ def api_chapter():
         "next_chapter_title": chapters[idx + 1]["title"] if has_next_chapter else None,
         "total_chapters": len(chapters)  # 新增：返回总章节数
     })
+if getattr(sys, 'frozen', False):
+    NOTES_FOLDER = os.path.join(os.path.dirname(sys.executable), "notes")
+else:
+    NOTES_FOLDER = "notes"
 
+@app.route("/api/save_note", methods=["POST"])
+def save_note():
+    """保存笔记"""
+    data = request.get_json()
+    novel = data.get("novel", "")
+    chapter_title = data.get("chapter_title", "")
+    content = data.get("content", "")
+    
+    if not novel or not content:
+        return jsonify({"error": "invalid data"}), 400
+    
+    # 确保笔记文件夹存在
+    if not os.path.exists(NOTES_FOLDER):
+        os.makedirs(NOTES_FOLDER)
+    
+    # 笔记文件名：小说名_笔记.txt
+    note_filename = novel.replace('.txt', '_笔记.txt')
+    note_filepath = os.path.join(NOTES_FOLDER, note_filename)
+    
+    # 添加时间戳
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # 格式化笔记内容
+    note_entry = f"\n{'='*50}\n"
+    note_entry += f"📅 时间: {timestamp}\n"
+    note_entry += f"📖 章节: {chapter_title}\n"
+    note_entry += f"{'='*50}\n"
+    note_entry += f"{content}\n"
+    
+    # 追加到文件
+    with open(note_filepath, "a", encoding="utf-8") as f:
+        f.write(note_entry)
+    
+    return jsonify({
+        "success": True,
+        "message": "笔记保存成功",
+        "note_file": note_filename
+    })
+
+@app.route("/api/get_notes")
+def get_notes():
+    """获取笔记内容"""
+    novel = request.args.get("novel", "")
+    if not novel:
+        return jsonify({"error": "invalid novel"}), 400
+    
+    note_filename = novel.replace('.txt', '_笔记.txt')
+    note_filepath = os.path.join(NOTES_FOLDER, note_filename)
+    
+    if not os.path.exists(note_filepath):
+        return jsonify({"notes": "", "exists": False})
+    
+    with open(note_filepath, "r", encoding="utf-8") as f:
+        notes_content = f.read()
+    
+    return jsonify({"notes": notes_content, "exists": True})
 def open_browser():
     """自动打开浏览器"""
     webbrowser.open('http://127.0.0.1:5000')
