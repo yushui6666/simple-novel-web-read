@@ -914,8 +914,20 @@
     const bookshelfContent = document.getElementById("bookshelfContent");
     const userInput = document.getElementById("userInput");
 
-    let currentNovel = localStorage.getItem("currentNovel") || "";
     let currentUser = localStorage.getItem("currentUser") || "default";
+    function normalizeUser(value) {
+      return (value || "default").trim() || "default";
+    }
+
+    function currentNovelKey(user=currentUser) {
+      return `currentNovel_${normalizeUser(user)}`;
+    }
+
+    function chapterKey(novel, user=currentUser) {
+      return `chapter_${normalizeUser(user)}_${novel}`;
+    }
+
+    let currentNovel = localStorage.getItem(currentNovelKey()) || (currentUser === "default" ? localStorage.getItem("currentNovel") || "" : "");
     let currentChapter = -1;
     let currentPage = 1;
     let totalPages = 1;
@@ -1078,10 +1090,17 @@
     }
 
     async function refreshNovels(selectedNovel="") {
-      const res = await fetch("/api/novels");
+      const res = await fetch(`/api/novels?user=${encodeURIComponent(currentUser)}`);
       const data = await res.json();
-      setNovelOptions(data.novels || [], selectedNovel);
-      return data.novels || [];
+      const novels = data.novels || [];
+      const selectedExists = !selectedNovel || novels.some((novel) => novel.filename === selectedNovel);
+      const safeSelected = selectedExists ? selectedNovel : "";
+      if (!selectedExists && currentNovel === selectedNovel) {
+        currentNovel = "";
+        localStorage.removeItem(currentNovelKey());
+      }
+      setNovelOptions(novels, safeSelected);
+      return novels;
     }
 
     function hydrateInitialNovels() {
@@ -1114,7 +1133,7 @@
         const response = await fetch("/api/delete_novel", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ novel })
+          body: JSON.stringify({ novel, user: currentUser })
         });
         const data = await response.json();
         if (!response.ok || !data.success) {
@@ -1122,9 +1141,9 @@
           return;
         }
 
-        localStorage.removeItem(`chapter_${novel}`);
+        localStorage.removeItem(chapterKey(novel));
         if (currentNovel === novel) {
-          localStorage.removeItem("currentNovel");
+          localStorage.removeItem(currentNovelKey());
           currentNovel = "";
           currentChapter = -1;
           currentPage = 1;
@@ -1154,7 +1173,7 @@
     async function loadChapters(novel, options={}) {
       if (!novel) return;
       try {
-        const res = await fetch(`/api/chapters?novel=${encodeURIComponent(novel)}`);
+        const res = await fetch(`/api/chapters?user=${encodeURIComponent(currentUser)}&novel=${encodeURIComponent(novel)}`);
         const data = await res.json();
         
         chapterSelect.innerHTML = '<option value="">📖 选择章节</option>';
@@ -1169,7 +1188,7 @@
         chapterSelect.disabled = false;
         currentNovel = novel;
         totalChapters = data.total_chapters || data.chapters.length;
-        localStorage.setItem("currentNovel", novel);
+        localStorage.setItem(currentNovelKey(), novel);
 
         // 从服务端加载用户阅读历史
         const book = await loadUserChapterHistory(novel);
@@ -1213,7 +1232,7 @@
       let targetChapter = book && Number.isInteger(book.chapter) ? book.chapter : null;
 
       if (targetChapter === null) {
-        const storedChapter = parseInt(localStorage.getItem(`chapter_${novel}`), 10);
+        const storedChapter = parseInt(localStorage.getItem(chapterKey(novel)), 10);
         if (!Number.isNaN(storedChapter)) {
           targetChapter = storedChapter;
         }
@@ -1235,7 +1254,7 @@
       loadingIndicator.style.display = "block";
 
       try {
-        const res = await fetch(`/api/chapter?novel=${encodeURIComponent(currentNovel)}&id=${chapter}&page=${page}`);
+        const res = await fetch(`/api/chapter?user=${encodeURIComponent(currentUser)}&novel=${encodeURIComponent(currentNovel)}&id=${chapter}&page=${page}`);
         const data = await res.json();
 
         if (!append) {
@@ -1261,7 +1280,7 @@
         const hasNextChapter = data.has_next_chapter;
         totalChapters = data.total_chapters || totalChapters;
 
-        localStorage.setItem(`chapter_${currentNovel}`, chapter);
+        localStorage.setItem(chapterKey(currentNovel), chapter);
         updatePageInfo(data.title, hasNextChapter);
         updateProgress();
         saveReadingHistory(data);
@@ -1374,20 +1393,32 @@
 
     // 用户切换：回车或失焦时生效
     async function switchUser() {
-      const newUser = userInput.value.trim() || "default";
+      const newUser = normalizeUser(userInput.value);
       if (newUser === currentUser) return;
       currentUser = newUser;
       localStorage.setItem("currentUser", currentUser);
       showToast(`已切换到用户：${currentUser}`);
 
-      // 重新加载书架
+      currentNovel = localStorage.getItem(currentNovelKey()) || "";
+      currentChapter = -1;
+      currentPage = 1;
+      totalPages = 1;
+      totalChapters = 0;
+      contentDiv.innerHTML = "";
+      chapterSelect.innerHTML = '<option value="">📖 选择章节</option>';
+      chapterSelect.disabled = true;
+      progressInfo.style.display = "none";
+      progressBarFill.style.width = "0%";
+      await refreshNovels(currentNovel);
+
       if (bookshelfPanel.classList.contains("show")) {
         await loadBookshelf();
       }
 
-      // 如果已选中小说，重新加载该用户的阅读位置
       if (currentNovel) {
-        await loadUserChapterHistory(currentNovel);
+        await loadChapters(currentNovel, { restoreLastRead: true });
+      } else {
+        pageInfo.textContent = `用户 ${currentUser} 的书架暂无选中小说 📚`;
       }
     }
 
@@ -1473,6 +1504,7 @@
 
       const formData = new FormData();
       formData.append("novel", file);
+      formData.append("user", currentUser);
 
       try {
         const response = await fetch("/api/upload_novel", {
@@ -1504,13 +1536,15 @@
 
     hydrateInitialNovels();
 
-    if (currentNovel) {
-      novelSelect.value = currentNovel;
-      novelPickerLabel.textContent = formatNovelLabel(currentNovel);
-      loadChapters(currentNovel, { restoreLastRead: true });
-    } else {
-      pageInfo.textContent = "请选择小说开始阅读 📚";
-    }
+    refreshNovels(currentNovel).then(() => {
+      if (currentNovel) {
+        novelSelect.value = currentNovel;
+        novelPickerLabel.textContent = formatNovelLabel(currentNovel);
+        loadChapters(currentNovel, { restoreLastRead: true });
+      } else {
+        pageInfo.textContent = "请选择小说开始阅读 📚";
+      }
+    });
 
     // ============ 笔记功能 ============
     const saveNoteBtn = document.getElementById("saveNoteBtn");
@@ -1585,7 +1619,8 @@
           body: JSON.stringify({
             novel: currentNovel,
             chapter_title: selectedChapterTitle,
-            content: selectedText
+            content: selectedText,
+            user: currentUser
           })
         });
         const data = await response.json();
@@ -1617,7 +1652,7 @@
 
     async function loadNotes() {
       try {
-        const response = await fetch(`/api/get_notes?novel=${encodeURIComponent(currentNovel)}`);
+        const response = await fetch(`/api/get_notes?user=${encodeURIComponent(currentUser)}&novel=${encodeURIComponent(currentNovel)}`);
         const data = await response.json();
         if (data.exists && data.notes) {
           notesContent.textContent = data.notes;
