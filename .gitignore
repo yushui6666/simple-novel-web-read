@@ -1,26 +1,38 @@
-# Python
+# Python bytecode and caches
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-.Python
-env/
-venv/
-.venv
+.pytest_cache/
 
-# Flask
+# Virtual environments
+.venv/
+venv/
+env/
+read-venv/
+
+# Local runtime files
+app.log
+*.log
+.server.pid
+reading_history.json
+
+# Flask/runtime folders
 instance/
 .webassets-cache
 
-# IDE
+# Build output
+build/
+dist/
+*.spec
+
+# Local editor and OS files
+.DS_Store
+Thumbs.db
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# 操作系统
-.DS_Store
-Thumbs.db
-
-# 小说文件（可选，如果不想上传小说内容）
-# novel/*.txt
+# Local-only shortcuts and binaries
+*.lnk
+*.exe

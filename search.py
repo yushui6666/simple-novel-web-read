@@ -1,387 +1,333 @@
 import requests
 from bs4 import BeautifulSoup
-import time
 import os
 import re
-from urllib.parse import urljoin, urlparse, unquote
-import chardet
+from urllib.parse import urljoin, unquote
 
-class Novel80Downloader:
+
+class Txt80Downloader:
+    """八零电子书 (txt80.cc) TXT小说下载器"""
+
+    BASE_URL = "https://www.txt80.cc"
+    SEARCH_URL = f"{BASE_URL}/e/search/index.php"
+
     def __init__(self):
-        """初始化80小说网下载器"""
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'zh-CN,zh;q=0.9',
         }
         self.session = requests.Session()
-        # 设置默认下载目录
-        self.default_save_dir = r'D:\read\dist\novel'
-    
-    def get_page(self, url):
+        self.default_save_dir = 'novel'
+
+    def get_page(self, url, method='get', data=None):
         """获取网页内容"""
         try:
-            response = self.session.get(url, headers=self.headers, timeout=15)
+            if method == 'post':
+                response = self.session.post(url, data=data, headers=self.headers, timeout=15)
+            else:
+                response = self.session.get(url, headers=self.headers, timeout=15)
             response.encoding = response.apparent_encoding or 'utf-8'
             response.raise_for_status()
             return BeautifulSoup(response.text, 'html.parser')
         except Exception as e:
             print(f"❌ 获取页面失败: {e}")
             return None
-    
+
     def decode_filename(self, filename):
-        """解码文件名，处理乱码问题"""
+        """解码文件名"""
         if not filename:
             return filename
-        
-        # 先尝试URL解码（处理%E6%96%97%E7%BD%97%E5%A4%A7%E9%99%86.txt这种情况）
+
         try:
             decoded = unquote(filename)
             if decoded != filename:
-                print(f"🔤 URL解码文件名: {decoded}")
                 return decoded
-        except:
+        except Exception:
             pass
-            
-        # 尝试不同的编码方式
-        encodings = ['utf-8', 'gbk', 'gb2312', 'gb18030', 'big5', 'latin1']
-        
-        for encoding in encodings:
+
+        if any('一' <= char <= '鿿' for char in filename):
+            return filename
+
+        try:
+            raw_bytes = filename.encode('latin1')
+        except UnicodeEncodeError:
+            return filename
+
+        for encoding in ['utf-8', 'gbk', 'gb2312', 'gb18030', 'big5']:
             try:
-                decoded = filename.encode('latin1').decode(encoding)
-                # 检查解码后的字符串是否包含中文字符
-                if any('\u4e00' <= char <= '\u9fff' for char in decoded):
+                decoded = raw_bytes.decode(encoding)
+                if any('一' <= char <= '鿿' for char in decoded):
                     return decoded
-            except:
+            except (UnicodeDecodeError, LookupError):
                 continue
-        
-        # 如果都不行，返回原始文件名
+
         return filename
-    
-    def download_txt_file(self, download_url, save_dir=None):
-        """
-        直接下载TXT文件
-        :param download_url: TXT下载页面URL
-        :param save_dir: 保存目录，默认为D:\read\dist\novel
-        """
-        # 如果没有指定保存目录，使用默认目录
+
+    def search(self, keyword):
+        """搜索小说，返回 [(书名, 详情页URL), ...]"""
+        print(f"\n🔍 正在搜索: {keyword}")
+
+        soup = self.get_page(
+            self.SEARCH_URL,
+            method='post',
+            data={
+                'show': 'title,softsay',
+                'keyboard': keyword,
+                'tbname': 'download',
+                'tempid': '1',
+            }
+        )
+
+        if not soup:
+            return []
+
+        results = []
+        for link in soup.find_all('a', href=re.compile(r'/.*?/txt\d+\.html')):
+            title_elem = link.find('font')
+            text = link.get_text(strip=True)
+            href = link.get('href', '')
+
+            # 匹配格式: 《书名》全本TXT电子书下载
+            match = re.search(r'《(.+?)》', text)
+            if match:
+                title = match.group(1)
+                if keyword.lower() in title.lower():
+                    url = urljoin(self.BASE_URL, href)
+                    results.append((title, url))
+
+        return results
+
+    def download(self, detail_url, save_dir=None):
+        """下载小说TXT文件"""
         if save_dir is None:
             save_dir = self.default_save_dir
-            
-        print("\n" + "="*60)
-        print("📥 正在下载TXT文件...")
-        print("="*60)
-        
-        # 创建保存目录
+
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
-            print(f"📁 创建目录: {save_dir}")
-        
-        # 获取下载页面
-        soup = self.get_page(download_url)
+
+        # Step 1: 获取详情页，提取中间下载页链接
+        print(f"\n📖 正在访问小说详情页...")
+        soup = self.get_page(detail_url)
         if not soup:
-            print("❌ 无法访问下载页面")
             return False
-        
-        # 查找小说标题
+
+        # 提取书名
         title = "未知小说"
-        title_selectors = ['h1', 'title', '.book-title', '.title']
-        for selector in title_selectors:
-            title_elem = soup.select_one(selector)
-            if title_elem:
-                title = title_elem.get_text(strip=True)
-                title = re.sub(r'TXT.*下载|全集.*|完.*', '', title).strip()
-                break
-        
+        title_match = re.search(r'《(.+?)》', soup.get_text())
+        if title_match:
+            title = title_match.group(1)
         print(f"📖 小说名称: {title}")
-        
-        # 查找真实的TXT下载链接
-        download_link = None
-        
-        # 优先查找手机版TXT链接（不是ZIP）
-        txt_links = soup.find_all('a', href=re.compile(r'\.txt', re.IGNORECASE))
-        for link in txt_links:
-            href = link.get('href')
-            text = link.get_text(strip=True)
-            # 跳过"最新章节"和"备份"链接，优先选择主下载链接
-            if href and '.txt' in href.lower():
-                if 'nt.80zw.la' not in href and 'txt.80zw.la' not in href:  # 排除最新50章和备份
-                    download_link = href if href.startswith('http') else urljoin(download_url, href)
-                    print(f"🔗 找到TXT下载链接: {download_link}")
-                    break
-        
-        # 如果没找到，尝试任何TXT链接
-        if not download_link:
-            for link in txt_links:
-                href = link.get('href')
-                if href:
-                    download_link = href if href.startswith('http') else urljoin(download_url, href)
-                    print(f"🔗 找到TXT下载链接: {download_link}")
-                    break
-        
-        # 方法2: 查找ZIP文件链接（作为备选）
-        if not download_link:
-            zip_links = soup.find_all('a', href=re.compile(r'\.zip', re.IGNORECASE))
-            for link in zip_links:
-                href = link.get('href')
-                if href and 'nz.80zw.la' not in href and 'zip.80zw.la' not in href:  # 排除最新50章和备份
-                    download_link = href if href.startswith('http') else urljoin(download_url, href)
-                    print(f"🔗 找到ZIP下载链接: {download_link}")
-                    break
-        
-        if not download_link:
-            print("\n❌ 未找到TXT下载链接")
-            print("💡 可能原因:")
-            print("   1. 该页面不是直接下载页")
-            print("   2. 网站需要登录或验证")
-            print("   3. 链接格式特殊，需要手动分析")
-            print("\n📝 请尝试:")
-            print("   1. 在浏览器中打开这个URL")
-            print("   2. 找到真正的TXT下载按钮")
-            print("   3. 右键复制下载链接")
-            print("   4. 再次运行程序，输入真实下载链接")
+
+        # 查找中间下载链接 /down/txtXXX.html
+        down_link = None
+        for a in soup.find_all('a', href=re.compile(r'/down/txt.+\.html')):
+            down_link = urljoin(self.BASE_URL, a.get('href'))
+            break
+
+        if not down_link:
+            print("❌ 未找到下载链接")
             return False
-        
-        # 开始下载
+
+        # Step 2: 获取中间下载页，提取直接下载URL
+        print(f"🔗 正在获取下载地址...")
+        soup = self.get_page(down_link)
+        if not soup:
+            return False
+
+        direct_url = None
+        for a in soup.find_all('a', href=re.compile(r'\.txt')):
+            href = a.get('href', '').strip()
+            if href and '.txt' in href.lower():
+                direct_url = href if href.startswith('http') else urljoin(self.BASE_URL, href)
+                break
+
+        if not direct_url:
+            print("❌ 未找到直接下载地址")
+            return False
+
+        print(f"📥 下载地址: {direct_url}")
+
+        # Step 3: 下载文件
         try:
-            print(f"\n⏬ 开始下载...")
-            
-            # 添加特殊headers，模拟浏览器下载
+            print(f"⏬ 开始下载...")
+
             download_headers = self.headers.copy()
-            download_headers['Referer'] = download_url
-            
-            response = self.session.get(download_link, headers=download_headers, stream=True, timeout=60)
+            download_headers['Referer'] = down_link
+
+            response = self.session.get(direct_url, headers=download_headers, stream=True, timeout=120)
             response.raise_for_status()
-            
-            # 检查是否又返回了HTML（说明链接不对）
+
             content_type = response.headers.get('content-type', '').lower()
             if 'text/html' in content_type:
-                print("\n❌ 下载链接返回的是HTML页面，不是文件")
-                print("💡 这可能是防盗链或需要特殊处理")
-                print(f"📋 Content-Type: {content_type}")
+                print("❌ 下载链接返回的是HTML页面，可能是防盗链")
                 return False
-            
-            # 获取文件大小
+
             total_size = int(response.headers.get('content-length', 0))
-            
-            # 判断文件类型
-            is_zip = download_link.lower().endswith('.zip')
-            
-            # 从URL或响应头获取文件名
+
+            # 确定文件名
             filename = None
             if 'content-disposition' in response.headers:
-                content_disp = response.headers['content-disposition']
-                filename_match = re.search(r'filename="?(.+?)"?(?:;|$)', content_disp)
-                if filename_match:
-                    filename = filename_match.group(1)
-                    print(f"📄 服务器返回的文件名: {filename}")
-                    # 解码文件名，处理乱码
-                    filename = self.decode_filename(filename)
-                    print(f"🔤 解码后的文件名: {filename}")
-            
-            if not filename:
-                # 清理文件名中的非法字符
-                safe_title = title.replace('\\', '_').replace('/', '_').replace(':', '_')
-                safe_title = safe_title.replace('*', '_').replace('?', '_').replace('"', '_')
-                safe_title = safe_title.replace('<', '_').replace('>', '_').replace('|', '_')
-                filename = f"{safe_title}.{'zip' if is_zip else 'txt'}"
-            
-            # 确保文件名是安全的
-            filename = re.sub(r'[\\/*?:"<>|]', '_', filename)
-            
-            save_path = os.path.join(save_dir, filename)
-            
-            # 下载文件
-            # 在 download_txt_file 方法中，找到下载文件的部分，替换为：
+                cd = response.headers['content-disposition']
+                m = re.search(r'filename[*]?=(?:UTF-8\'\')?"?([^";]+)', cd)
+                if m:
+                    filename = self.decode_filename(m.group(1))
 
-# 下载文件
+            if not filename:
+                filename = os.path.basename(direct_url.split('?')[0])
+                filename = self.decode_filename(unquote(filename))
+
+            filename = re.sub(r'[\\/*?:"<>|]', '_', filename)
+            save_path = os.path.join(save_dir, filename)
+
+            import time
+
             downloaded = 0
             start_time = time.time()
-            chunk_size = 8192
+            bar_width = 28
 
             with open(save_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=chunk_size):
+                for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
                         downloaded += len(chunk)
-            
-            # 显示进度
+                        elapsed = max(time.time() - start_time, 0.001)
+                        speed = downloaded / elapsed
+
                         if total_size > 0:
                             percent = downloaded / total_size * 100
-                            elapsed = time.time() - start_time
-                            speed = downloaded / 1024 / elapsed if elapsed > 0 else 0  # KB/s
-                            remaining = (total_size - downloaded) / 1024 / speed if speed > 0 else 0
-                
-                            print(f"\r📥 进度: {percent:.1f}% | "
-                                f"{downloaded / 1024 / 1024:.2f}/{total_size / 1024 / 1024:.2f} MB | "
-                                f"{speed:.1f} KB/s | "
-                                f"剩余: {remaining:.1f}s", end='', flush=True)
+                            filled = int(bar_width * downloaded / total_size)
+                            bar = '█' * filled + '░' * (bar_width - filled)
+                            size_str = f"{self._human_size(downloaded)}/{self._human_size(total_size)}"
                         else:
-                # 如果无法获取总大小，只显示已下载量
-                            print(f"\r📥 已下载: {downloaded / 1024 / 1024:.2f} MB", end='', flush=True)
-            
-            print(f"\n\n✅ 下载完成！")
+                            # 无 content-length 时使用滚动动画
+                            pos = (downloaded // 8192) % (bar_width * 2)
+                            if pos < bar_width:
+                                filled = pos
+                            else:
+                                filled = bar_width * 2 - pos
+                            bar = '█' * filled + '▒' + '░' * max(bar_width - filled - 1, 0)
+                            size_str = f"{self._human_size(downloaded)} 已下载"
+                            percent = 0
+
+                        print(
+                            f"\r  {bar}  {size_str}  {self._human_size(speed)}/s  ",
+                            end='', flush=True
+                        )
+
+            elapsed = time.time() - start_time
+            print(f"\n\n✅ 下载完成！耗时 {elapsed:.1f} 秒")
             print(f"💾 保存位置: {os.path.abspath(save_path)}")
             print(f"📦 文件大小: {os.path.getsize(save_path) / 1024 / 1024:.2f} MB")
-            
-            # 如果是ZIP文件，尝试解压
-            if is_zip:
-                print(f"\n📦 检测到ZIP压缩包，尝试解压...")
-                try:
-                    import zipfile
-                    extract_dir = os.path.join(save_dir, 'extracted')
-                    if not os.path.exists(extract_dir):
-                        os.makedirs(extract_dir)
-                    
-                    with zipfile.ZipFile(save_path, 'r') as zip_ref:
-                        # 列出压缩包内容
-                        file_list = zip_ref.namelist()
-                        print(f"   压缩包内文件: {', '.join(file_list)}")
-                        
-                        # 解压所有文件
-                        zip_ref.extractall(extract_dir)
-                        print(f"✅ 解压完成！文件保存在: {os.path.abspath(extract_dir)}")
-                        
-                        # 对解压出的TXT文件进行编码检查
-                        for extracted_file in file_list:
-                            if extracted_file.endswith('.txt'):
-                                txt_path = os.path.join(extract_dir, extracted_file)
-                                self.check_and_fix_encoding(txt_path)
-                except Exception as e:
-                    print(f"⚠️  解压失败: {e}")
-                    print(f"   你可以手动解压ZIP文件")
-            else:
-                # 检测编码并尝试转换
-                self.check_and_fix_encoding(save_path)
-            
-            print("="*60)
+
+            self.fix_encoding(save_path)
             return True
-            
+
         except Exception as e:
             print(f"\n❌ 下载失败: {e}")
             return False
-    
-    def check_and_fix_encoding(self, file_path):
-        """检查并修复文件编码"""
+
+    @staticmethod
+    def _human_size(size_bytes):
+        """将字节数转为人类可读的大小"""
+        for unit in ('B', 'KB', 'MB', 'GB'):
+            if size_bytes < 1024:
+                return f"{size_bytes:.1f} {unit}"
+            size_bytes /= 1024
+        return f"{size_bytes:.1f} TB"
+
+    def fix_encoding(self, file_path):
+        """检测并修复文件编码为UTF-8"""
         try:
-            # 尝试检测文件编码
             with open(file_path, 'rb') as f:
                 raw_data = f.read()
-            
-            # 尝试不同编码
-            encodings = ['utf-8', 'gbk', 'gb2312', 'gb18030', 'big5']
-            content = None
-            detected_encoding = None
-            
-            for encoding in encodings:
+
+            if not raw_data:
+                return
+
+            best_encoding = 'utf-8'
+            best_content = None
+            best_chinese_count = -1
+
+            for encoding in ['utf-8', 'gbk', 'gb2312', 'gb18030', 'big5']:
                 try:
                     content = raw_data.decode(encoding)
-                    detected_encoding = encoding
-                    break
-                except:
+                    chinese_count = sum(1 for c in content if '一' <= c <= '鿿')
+                    if chinese_count > best_chinese_count:
+                        best_chinese_count = chinese_count
+                        best_encoding = encoding
+                        best_content = content
+                except (UnicodeDecodeError, LookupError):
                     continue
-            
-            if content and detected_encoding != 'utf-8':
-                print(f"\n🔄 检测到编码: {detected_encoding}，转换为UTF-8...")
+
+            if best_content and best_encoding != 'utf-8':
+                print(f"🔄 检测到编码: {best_encoding}，转换为UTF-8...")
                 with open(file_path, 'w', encoding='utf-8') as f:
-                    f.write(content)
+                    f.write(best_content)
                 print("✅ 编码转换完成")
         except Exception as e:
-            print(f"\n⚠️  编码检查失败: {e}")
-    
-    def search_and_download(self, keyword):
-        """搜索并下载小说（从80zw.la）"""
-        base_url = "http://www.80zw.la"
-        
-        print(f"\n🔍 正在搜索: {keyword}")
-        
-        # 访问首页查找
-        soup = self.get_page(base_url)
-        if not soup:
-            return False
-        
-        results = []
-        all_links = soup.find_all('a', href=re.compile(r'/txtxz/\d+\.html'))
-        
-        for link in all_links:
-            title = link.get_text(strip=True)
-            if keyword.lower() in title.lower():
-                url = urljoin(base_url, link.get('href'))
-                results.append((title, url))
-        
-        # 去重
-        unique_results = []
-        seen_urls = set()
-        for title, url in results:
-            if url not in seen_urls:
-                unique_results.append((title, url))
-                seen_urls.add(url)
-        
-        if not unique_results:
-            print(f"❌ 未找到 '{keyword}'")
-            return False
-        
-        print(f"\n✅ 找到 {len(unique_results)} 个结果:\n")
-        for i, (title, url) in enumerate(unique_results, 1):
-            print(f"{i}. {title}")
-        
-        if len(unique_results) == 1:
-            choice = 1
-        else:
-            try:
-                choice = int(input(f"\n请选择 (1-{len(unique_results)}): "))
-            except:
-                choice = 1
-        
-        novel_url = unique_results[choice - 1][1]
-        
-        # 获取小说页面，查找下载链接
-        print(f"\n📖 正在访问小说页面...")
-        soup = self.get_page(novel_url)
-        if soup:
-            # 查找下载链接
-            download_links = soup.find_all('a', href=re.compile(r'down|download|txt'))
-            if download_links:
-                download_url = urljoin(novel_url, download_links[0].get('href'))
-                return self.download_txt_file(download_url)
-        
-        return False
+            print(f"⚠️  编码检查失败: {e}")
 
 
 def main():
-    """主程序"""
-    print("="*60)
-    print("📚 小说下载工具")
-    print("="*60)
-    
-    downloader = Novel80Downloader()
-    
+    print("=" * 60)
+    print("📚 八零电子书 (txt80.cc) - TXT小说下载工具")
+    print("=" * 60)
+
+    downloader = Txt80Downloader()
     print(f"💾 默认下载目录: {downloader.default_save_dir}")
-    
+
     print("\n请选择操作方式:")
-    print("1. 直接输入下载页面URL")
-    print("2. 搜索小说名称")
-    
+    print("1. 搜索小说名称并下载")
+    print("2. 直接输入小说详情页URL")
+
     choice = input("\n请选择 (1/2): ").strip() or "1"
-    
+
     if choice == "1":
-        download_url = input("\n请输入下载页面URL: ").strip()
-        
-        if not download_url:
-            print("❌ URL不能为空！")
-            return
-        
-        downloader.download_txt_file(download_url)
-    
-    elif choice == "2":
         keyword = input("\n请输入小说名称: ").strip()
-        
         if not keyword:
             print("❌ 小说名称不能为空！")
             return
-        
-        downloader.search_and_download(keyword)
-    
+
+        results = downloader.search(keyword)
+
+        if not results:
+            print(f"❌ 未找到与 '{keyword}' 相关的小说")
+            print("💡 提示: 可以尝试输入更简短的关键词，或直接输入详情页URL（选择操作方式2）")
+            return
+
+        # 去重
+        seen = set()
+        unique = []
+        for t, u in results:
+            if u not in seen:
+                unique.append((t, u))
+                seen.add(u)
+
+        print(f"\n✅ 找到 {len(unique)} 个结果:\n")
+        for i, (t, u) in enumerate(unique, 1):
+            print(f"  {i}. 《{t}》")
+
+        if len(unique) == 1:
+            choice_idx = 1
+        else:
+            try:
+                choice_idx = int(input(f"\n请选择 (1-{len(unique)}): "))
+                if choice_idx < 1 or choice_idx > len(unique):
+                    print("⚠️  选择超出范围，默认使用第1个结果")
+                    choice_idx = 1
+            except Exception:
+                choice_idx = 1
+
+        downloader.download(unique[choice_idx - 1][1])
+
+    elif choice == "2":
+        detail_url = input("\n请输入小说详情页URL: ").strip()
+        if not detail_url:
+            print("❌ URL不能为空！")
+            return
+        downloader.download(detail_url)
+
     else:
         print("❌ 无效选择！")
 
@@ -389,9 +335,8 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-        
     except KeyboardInterrupt:
-        print("\n\n⚠️  用户中断下载")
+        print("\n\n⚠️  用户中断")
     except Exception as e:
         print(f"\n\n❌ 程序出错: {e}")
         import traceback

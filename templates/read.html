@@ -2,336 +2,44 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>📖 小说阅读器</title>
   <style>
+    :root {
+      --apple-blue: #0066cc;
+      --apple-blue-hover: #0071e3;
+      --ink: #1d1d1f;
+      --muted: #7a7a7a;
+      --hairline: #e0e0e0;
+      --soft: #f5f5f7;
+      --surface: rgba(255, 255, 255, 0.82);
+      --surface-strong: rgba(255, 255, 255, 0.96);
+      --reader-width: 820px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { min-height: 100%; }
+
     body {
-      font-family: "微软雅黑", sans-serif;
-      line-height: 1.8;
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 20px;
-      transition: background 0.3s, color 0.3s;
+      margin: 0;
+      min-height: 100%;
+      overflow-x: hidden;
+      color: var(--ink);
+      background: var(--soft);
+      font-family: "SF Pro Text", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.76;
+      transition: background-color 0.24s ease, color 0.24s ease;
     }
 
-    /* 默认浅色主题 */
-    body.light {
-      background: #f9f9f9;
-      color: #333;
-    }
-
-    /* 深色主题 */
-    body.dark {
-      background: #1e1e1e;
-      color: #ddd;
-    }
-
-    /* 护眼绿 */
-    body.green {
-      background: #c7edcc;
-      color: #2d4a2b;
-    }
-
-    /* 羊皮纸 */
-    body.parchment {
-      background: #f4ecd8;
-      color: #5c4a2c;
-    }
-
-    /* 护眼米黄 */
-    body.beige {
-      background: #e8dcc4;
-      color: #4a3f2e;
-    }
-
-    /* 夜间蓝 */
-    body.night-blue {
-      background: #1a2332;
-      color: #c9d1d9;
-    }
-
-    /* 淡粉色 */
-    body.pink {
-      background: #ffe4e1;
-      color: #5a3a3a;
-    }
-
-    /* 薰衣草紫 */
-    body.lavender {
-      background: #e6e6fa;
-      color: #4a4070;
-    }
-
-    #content {
-      white-space: pre-wrap;
-      font-size: 18px;
-      margin-top: 80px;
-      padding-bottom: 100px;
-    }
-
-    .chapter-block {
-      margin-bottom: 40px;
-    }
-
-    .chapter-block h3 {
-      color: #007bff;
-      border-bottom: 2px solid #007bff;
-      padding-bottom: 10px;
-      margin-bottom: 20px;
-    }
-
-    body.dark .chapter-block h3 {
-      color: #4a9eff;
-      border-bottom-color: #4a9eff;
-    }
-
-    body.green .chapter-block h3 {
-      color: #2d7a3e;
-      border-bottom-color: #2d7a3e;
-    }
-
-    body.parchment .chapter-block h3 {
-      color: #8b6f47;
-      border-bottom-color: #8b6f47;
-    }
-
-    body.beige .chapter-block h3 {
-      color: #7a6446;
-      border-bottom-color: #7a6446;
-    }
-
-    body.night-blue .chapter-block h3 {
-      color: #58a6ff;
-      border-bottom-color: #58a6ff;
-    }
-
-    body.pink .chapter-block h3 {
-      color: #d1758b;
-      border-bottom-color: #d1758b;
-    }
-
-    body.lavender .chapter-block h3 {
-      color: #7b68ee;
-      border-bottom-color: #7b68ee;
-    }
-
-    #controls {
-      position: fixed;
-      top: 80px;
-      right: 10px;
-      background: rgba(255,255,255,0.9);
-      border-radius: 10px;
-      padding: 8px;
-      display: flex;
-      gap: 10px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.2);
-      z-index: 20;
-    }
-
-    body.dark #controls, body.night-blue #controls {
-      background: rgba(40,40,40,0.9);
-    }
-
-    body.green #controls {
-      background: rgba(199,237,204,0.95);
-    }
-
-    body.parchment #controls {
-      background: rgba(244,236,216,0.95);
-    }
-
-    body.beige #controls {
-      background: rgba(232,220,196,0.95);
-    }
-
-    body.pink #controls {
-      background: rgba(255,228,225,0.95);
-    }
-
-    body.lavender #controls {
-      background: rgba(230,230,250,0.95);
-    }
-
-    #menuBar {
-      position: fixed;
-      top: 10px;
-      left: 10px;
-      z-index: 30;
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-
-    select {
-      font-size: 16px;
-      padding: 5px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-      background: white;
-      cursor: pointer;
-      
-    }
-    #chapterSelect {
-      width: 1600px;
-    } 
-
-
-    body.dark select, body.night-blue select {
-      background: #2a2a2a;
-      color: #ddd;
-      border-color: #555;
-    }
-
-    body.green select {
-      background: #b5e3bb;
-      color: #2d4a2b;
-      border-color: #7ab583;
-    }
-
-    body.parchment select {
-      background: #ede3cb;
-      color: #5c4a2c;
-      border-color: #c9b896;
-    }
-
-    body.beige select {
-      background: #ddd1b3;
-      color: #4a3f2e;
-      border-color: #b8a887;
-    }
-
-    body.pink select {
-      background: #ffd4d4;
-      color: #5a3a3a;
-      border-color: #ffb3b3;
-    }
-
-    body.lavender select {
-      background: #d8d8f0;
-      color: #4a4070;
-      border-color: #b8b8e8;
-    }
-
-    button {
-      padding: 6px 10px;
-      border: none;
-      border-radius: 6px;
-      background: #007bff;
-      color: white;
-      cursor: pointer;
-      position: relative;
-    }
-
-    button:hover {
-      background: #0056b3;
-    }
-
-    /* 主题选择器样式 */
-    #themeMenu {
-      display: none;
-      position: fixed;
-      top: 120px;
-      right: 10px;
-      background: white;
-      border-radius: 10px;
-      padding: 10px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      z-index: 25;
-      min-width: 140px;
-    }
-
-    body.dark #themeMenu, body.night-blue #themeMenu {
-      background: #2a2a2a;
-      color: #ddd;
-    }
-
-    body.green #themeMenu {
-      background: #b5e3bb;
-      color: #2d4a2b;
-    }
-
-    body.parchment #themeMenu {
-      background: #ede3cb;
-      color: #5c4a2c;
-    }
-
-    body.beige #themeMenu {
-      background: #ddd1b3;
-      color: #4a3f2e;
-    }
-
-    body.pink #themeMenu {
-      background: #ffd4d4;
-      color: #5a3a3a;
-    }
-
-    body.lavender #themeMenu {
-      background: #d8d8f0;
-      color: #4a4070;
-    }
-
-    #themeMenu.show {
-      display: block;
-    }
-
-    .theme-option {
-      padding: 8px 12px;
-      cursor: pointer;
-      border-radius: 6px;
-      transition: background 0.2s;
-      margin: 2px 0;
-    }
-
-    .theme-option:hover {
-      background: rgba(0,123,255,0.1);
-    }
-
-    .theme-option.active {
-      background: rgba(0,123,255,0.2);
-      font-weight: bold;
-    }
-
-    body.dark .theme-option:hover, body.night-blue .theme-option:hover {
-      background: rgba(74,158,255,0.2);
-    }
-
-    body.dark .theme-option.active, body.night-blue .theme-option.active {
-      background: rgba(74,158,255,0.3);
-    }
-
-    #loadingIndicator {
-      text-align: center;
-      padding: 20px;
-      color: #999;
-      font-style: italic;
-    }
-
-    #pageInfo {
-      position: fixed;
-      top: 120px;  /* 原来是 bottom: 70px */
-      left: 20px;  /* 原来是 right: 20px */
-      background: rgba(0,123,255,0.9);
-      color: white;
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-size: 14px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-      z-index: 25;
-      max-width: 500px;
-    }
-
-    #progressInfo {
-      position: fixed;
-      top: 170px;  /* 原来是 bottom: 20px,在 pageInfo 下方 */
-      left: 20px;  /* 原来是 right: 20px */
-      background: rgba(40,167,69,0.9);
-      color: white;
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-size: 14px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-      z-index: 25;
-      display: none;
-    }
+    body.light { background: #f5f5f7; color: #1d1d1f; }
+    body.dark { background: #000; color: #f5f5f7; }
+    body.green { background: #eff7f0; color: #233c28; }
+    body.parchment { background: #f5efe4; color: #40382c; }
+    body.beige { background: #f2eadb; color: #40382f; }
+    body.night-blue { background: #070b12; color: #edf3ff; }
+    body.pink { background: #fff1f2; color: #443032; }
+    body.lavender { background: #f3f1ff; color: #332f49; }
 
     #progressBar {
       position: fixed;
@@ -339,165 +47,779 @@
       left: 0;
       width: 100%;
       height: 3px;
-      background: rgba(0,0,0,0.1);
-      z-index: 40;
+      z-index: 80;
+      background: transparent;
     }
 
     #progressBarFill {
-      height: 100%;
-      background: linear-gradient(90deg, #007bff, #00c851);
-      transition: width 0.3s ease;
       width: 0%;
+      height: 100%;
+      background: var(--apple-blue);
+      transition: width 0.28s ease;
     }
-    /* 文本选择按钮 */
+
+    #menuBar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 40;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 22px;
+      min-height: 62px;
+      background: rgba(245, 245, 247, 0.78);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      backdrop-filter: saturate(180%) blur(24px);
+      -webkit-backdrop-filter: saturate(180%) blur(24px);
+    }
+
+    #menuLeft {
+      display: grid;
+      grid-template-columns: minmax(180px, 0.9fr) minmax(200px, 1.2fr);
+      gap: 12px;
+      align-items: center;
+      flex: 1;
+      min-width: 0;
+    }
+
+    #menuRight {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    body.dark #menuBar,
+    body.night-blue #menuBar {
+      background: rgba(15, 15, 17, 0.76);
+      border-bottom-color: rgba(255, 255, 255, 0.14);
+    }
+
+    body.green #menuBar { background: rgba(239, 247, 240, 0.78); }
+    body.parchment #menuBar { background: rgba(245, 239, 228, 0.8); }
+    body.beige #menuBar { background: rgba(242, 234, 219, 0.8); }
+    body.pink #menuBar { background: rgba(255, 241, 242, 0.82); }
+    body.lavender #menuBar { background: rgba(243, 241, 255, 0.82); }
+
+    select {
+      width: 100%;
+      min-width: 0;
+      height: 42px;
+      padding: 0 14px;
+      border: 1px solid rgba(0, 0, 0, 0.12);
+      border-radius: 999px;
+      outline: none;
+      color: inherit;
+      background: var(--surface-strong);
+      font: 400 14px/1 "SF Pro Text", "PingFang SC", -apple-system, BlinkMacSystemFont, sans-serif;
+      cursor: pointer;
+      transition: border-color 0.18s ease, background-color 0.18s ease;
+    }
+
+    select:focus { border-color: var(--apple-blue); }
+    select:disabled { color: var(--muted); cursor: default; opacity: 0.72; }
+
+    body.dark select,
+    body.night-blue select {
+      background-color: rgba(38, 38, 41, 0.92);
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+
+    #novelSelect { display: none; }
+
+    #novelPicker {
+      position: relative;
+      min-width: 0;
+    }
+
+    #novelPickerButton {
+      width: 100%;
+      min-height: 42px;
+      justify-content: space-between;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 14px 0 16px;
+      color: inherit;
+      background: var(--surface-strong);
+      border: 1px solid rgba(0, 0, 0, 0.12);
+      border-radius: 999px;
+      text-align: left;
+    }
+
+    #novelPickerLabel {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #novelPickerButton::after {
+      content: "⌄";
+      flex: 0 0 auto;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    #novelPickerMenu {
+      display: none;
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      z-index: 90;
+      width: min(420px, 90vw);
+      max-height: 360px;
+      overflow-y: auto;
+      padding: 8px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 18px;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.14);
+      backdrop-filter: saturate(180%) blur(28px);
+      -webkit-backdrop-filter: saturate(180%) blur(28px);
+    }
+
+    #novelPicker.open #novelPickerMenu { display: block; }
+
+    .novel-picker-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 6px;
+      padding: 4px;
+      border-radius: 12px;
+    }
+
+    .novel-picker-row:hover { background: rgba(0, 102, 204, 0.08); }
+
+    .novel-picker-name {
+      min-height: 36px;
+      padding: 0 10px;
+      color: inherit;
+      background: transparent;
+      border-radius: 10px;
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .novel-picker-name:hover { background: transparent; color: var(--apple-blue); }
+
+    .novel-delete-btn {
+      min-height: 32px;
+      padding: 0 10px;
+      color: #b42318;
+      background: rgba(180, 35, 24, 0.1);
+      font-size: 13px;
+    }
+
+    .novel-delete-btn:hover { color: #fff; background: #b42318; }
+
+    body.dark #novelPickerButton,
+    body.night-blue #novelPickerButton {
+      background: rgba(38, 38, 41, 0.92);
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+
+    body.dark #novelPickerMenu,
+    body.night-blue #novelPickerMenu {
+      color: #f5f5f7;
+      background: rgba(28, 28, 30, 0.94);
+      border-color: rgba(255, 255, 255, 0.14);
+    }
+
+    #controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0;
+    }
+
+    button {
+      min-height: 40px;
+      border: 0;
+      border-radius: 999px;
+      padding: 0 16px;
+      color: #fff;
+      background: var(--apple-blue);
+      font: 400 14px/1 "SF Pro Text", "PingFang SC", -apple-system, BlinkMacSystemFont, sans-serif;
+      cursor: pointer;
+      transition: background-color 0.18s ease, transform 0.12s ease, opacity 0.18s ease;
+    }
+
+    button:hover { background: var(--apple-blue-hover); }
+    button:active { transform: scale(0.97); }
+
+    #fontMinus,
+    #fontPlus {
+      width: 40px;
+      padding: 0;
+      color: var(--ink);
+      background: rgba(210, 210, 215, 0.72);
+    }
+
+    body.dark #fontMinus,
+    body.dark #fontPlus,
+    body.night-blue #fontMinus,
+    body.night-blue #fontPlus {
+      color: #fff;
+      background: rgba(70, 70, 74, 0.78);
+    }
+
+    #toggleMode { padding: 0 18px; }
+
+    #userSwitcher {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    #userSwitcher .user-label {
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    #userInput {
+      width: 130px;
+      height: 38px;
+      border: 1px solid rgba(0,0,0,0.12);
+      border-radius: 999px;
+      padding: 0 14px;
+      font: 400 14px/1 "SF Pro Text","PingFang SC",-apple-system,BlinkMacSystemFont,sans-serif;
+      color: var(--ink);
+      background: rgba(255,255,255,0.82);
+      outline: none;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    #userInput:focus {
+      border-color: var(--apple-blue);
+      box-shadow: 0 0 0 3px rgba(0,102,204,0.15);
+    }
+
+    body.dark #userInput, body.night-blue #userInput {
+      color: #fff;
+      background: rgba(40,40,44,0.88);
+      border-color: rgba(255,255,255,0.15);
+    }
+
+    #uploadInput { display: none; }
+
+    #uploadPanel {
+      position: fixed;
+      right: 22px;
+      bottom: 24px;
+      z-index: 35;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 8px 8px 14px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 999px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.1);
+      backdrop-filter: saturate(180%) blur(18px);
+      -webkit-backdrop-filter: saturate(180%) blur(18px);
+    }
+
+    #uploadPanel span {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    #uploadBtn {
+      padding: 0 16px;
+      color: #fff;
+      background: var(--apple-blue);
+    }
+
+    body.dark #uploadPanel,
+    body.night-blue #uploadPanel {
+      color: #f5f5f7;
+      background: rgba(30, 30, 32, 0.78);
+      border-color: rgba(255, 255, 255, 0.14);
+    }
+
+    #themeMenu {
+      display: none;
+      position: fixed;
+      top: 66px;
+      right: 22px;
+      z-index: 70;
+      width: 180px;
+      max-height: 72vh;
+      overflow-y: auto;
+      padding: 8px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 18px;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.14);
+      backdrop-filter: saturate(180%) blur(28px);
+      -webkit-backdrop-filter: saturate(180%) blur(28px);
+    }
+
+    #themeMenu.show { display: block; animation: menuIn 0.18s ease; }
+    @keyframes menuIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    body.dark #themeMenu,
+    body.night-blue #themeMenu {
+      color: #fff;
+      background: rgba(28, 28, 30, 0.94);
+      border-color: rgba(255, 255, 255, 0.14);
+    }
+
+    .theme-option {
+      margin: 2px 0;
+      padding: 11px 12px;
+      border-radius: 11px;
+      color: inherit;
+      font-size: 14px;
+      line-height: 1.25;
+      cursor: pointer;
+    }
+
+    .theme-option:hover { background: rgba(0, 102, 204, 0.1); }
+    .theme-option.active {
+      color: var(--apple-blue);
+      background: rgba(0, 102, 204, 0.12);
+      font-weight: 600;
+    }
+
+    #content {
+      width: min(var(--reader-width), calc(100% - 40px));
+      min-height: 82vh;
+      margin: 0 auto;
+      padding: 124px 0 160px;
+      white-space: pre-wrap;
+      font-size: 18px;
+      line-height: 1.92;
+      color: inherit;
+      text-rendering: optimizeLegibility;
+    }
+
+    .chapter-block {
+      margin: 0 0 54px;
+      padding: 0;
+    }
+
+    .chapter-block h3 {
+      margin: 0 0 30px;
+      padding: 0 0 18px;
+      color: inherit;
+      border-bottom: 1px solid currentColor;
+      font-family: "SF Pro Display", "PingFang SC", -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 34px;
+      font-weight: 600;
+      line-height: 1.28;
+      letter-spacing: 0;
+      opacity: 0.96;
+    }
+
+    body.light .chapter-block h3,
+    body.parchment .chapter-block h3,
+    body.beige .chapter-block h3,
+    body.green .chapter-block h3,
+    body.pink .chapter-block h3,
+    body.lavender .chapter-block h3 {
+      border-bottom-color: rgba(29, 29, 31, 0.12);
+    }
+
+    body.dark .chapter-block h3,
+    body.night-blue .chapter-block h3 {
+      border-bottom-color: rgba(255, 255, 255, 0.18);
+    }
+
+    #pageInfo,
+    #progressInfo {
+      position: fixed;
+      left: 22px;
+      z-index: 30;
+      max-width: min(520px, calc(100% - 44px));
+      padding: 8px 13px;
+      border-radius: 999px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.76);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      font-size: 12px;
+      line-height: 1.3;
+      pointer-events: none;
+      backdrop-filter: saturate(180%) blur(18px);
+      -webkit-backdrop-filter: saturate(180%) blur(18px);
+    }
+
+    #pageInfo { top: 82px; }
+    #progressInfo { top: 122px; display: none; color: var(--apple-blue); }
+
+    body.dark #pageInfo,
+    body.dark #progressInfo,
+    body.night-blue #pageInfo,
+    body.night-blue #progressInfo {
+      color: #fff;
+      background: rgba(30, 30, 32, 0.78);
+      border-color: rgba(255, 255, 255, 0.14);
+    }
+
+    body.dark #progressInfo,
+    body.night-blue #progressInfo { color: #2997ff; }
+
+    #loadingIndicator {
+      position: fixed;
+      left: 50%;
+      bottom: 28px;
+      z-index: 35;
+      transform: translateX(-50%);
+      padding: 9px 16px;
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      font-size: 13px;
+      backdrop-filter: saturate(180%) blur(18px);
+      -webkit-backdrop-filter: saturate(180%) blur(18px);
+    }
+
+    #notesBtn {
+      position: fixed;
+      left: 22px;
+      bottom: 24px;
+      z-index: 35;
+      color: #fff;
+      background: #1d1d1f;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+    }
+
+    #notesBtn:hover { background: #333; }
+
+    body.dark #notesBtn,
+    body.night-blue #notesBtn {
+      color: #1d1d1f;
+      background: #f5f5f7;
+    }
+
+    #bookshelfBtn {
+      position: fixed;
+      left: 118px;
+      bottom: 24px;
+      z-index: 35;
+      color: #fff;
+      background: #2f6f4e;
+      box-shadow: 0 12px 30px rgba(47, 111, 78, 0.16);
+    }
+
+    #bookshelfBtn:hover { background: #24613f; }
+
+    body.dark #bookshelfBtn,
+    body.night-blue #bookshelfBtn {
+      color: #f5f5f7;
+      background: #2f8f62;
+    }
+
     #saveNoteBtn {
       position: fixed;
       display: none;
-      background: #28a745;
-      color: white;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 20px;
-      cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-      z-index: 50;
-      font-size: 14px;
-      transition: all 0.2s;
+      z-index: 150;
+      padding: 0 18px;
+      color: #fff;
+      background: var(--apple-blue);
+      box-shadow: 0 16px 36px rgba(0, 102, 204, 0.26);
     }
 
-    #saveNoteBtn:hover {
-      background: #218838;
-      transform: scale(1.05);
-    }
-
-    /* 笔记按钮 */
-    #notesBtn {
-      position: fixed;
-      top: 220px;  /* 原来是 bottom: 120px,在 progressInfo 下方 */
-      left: 20px;  /* 原来是 right: 20px */
-      background: #ffc107;
-      color: #333;
-      border: none;
-      padding: 10px 16px;
-      border-radius: 25px;
-      cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-      z-index: 25;
-      font-size: 14px;
-      font-weight: bold;
-    }
-
-    #notesBtn:hover {
-      background: #ffb300;
-    }
-
-    /* 笔记面板 */
     #notesPanel {
       position: fixed;
       top: 0;
-      right: -400px;
-      width: 400px;
+      right: -100%;
+      width: 420px;
+      max-width: 100%;
       height: 100%;
-      background: white;
-      box-shadow: -2px 0 10px rgba(0,0,0,0.3);
-      transition: right 0.3s ease;
-      z-index: 100;
+      z-index: 120;
       overflow-y: auto;
-      padding: 20px;
+      padding: 86px 24px 32px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.9);
+      border-left: 1px solid rgba(0, 0, 0, 0.08);
+      box-shadow: -24px 0 70px rgba(0, 0, 0, 0.12);
+      backdrop-filter: saturate(180%) blur(30px);
+      -webkit-backdrop-filter: saturate(180%) blur(30px);
+      transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    #notesPanel.show {
-      right: 0;
+    #notesPanel.show { right: 0; }
+
+    #bookshelfPanel {
+      position: fixed;
+      top: 0;
+      right: -100%;
+      width: 460px;
+      max-width: 100%;
+      height: 100%;
+      z-index: 120;
+      overflow-y: auto;
+      padding: 86px 24px 32px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.9);
+      border-left: 1px solid rgba(0, 0, 0, 0.08);
+      box-shadow: -24px 0 70px rgba(0, 0, 0, 0.12);
+      backdrop-filter: saturate(180%) blur(30px);
+      -webkit-backdrop-filter: saturate(180%) blur(30px);
+      transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    body.dark #notesPanel, body.night-blue #notesPanel {
-      background: #2a2a2a;
-      color: #ddd;
+    #bookshelfPanel.show { right: 0; }
+
+    body.dark #notesPanel,
+    body.night-blue #notesPanel,
+    body.dark #bookshelfPanel,
+    body.night-blue #bookshelfPanel {
+      color: #f5f5f7;
+      background: rgba(20, 20, 22, 0.94);
+      border-left-color: rgba(255, 255, 255, 0.12);
     }
 
-    body.green #notesPanel {
-      background: #e0f5e4;
-      color: #2d4a2b;
+    body.green #notesPanel { background: rgba(248, 253, 249, 0.92); }
+    body.parchment #notesPanel { background: rgba(252, 248, 240, 0.94); }
+    body.beige #notesPanel { background: rgba(249, 244, 235, 0.94); }
+    body.pink #notesPanel { background: rgba(255, 248, 248, 0.94); }
+    body.lavender #notesPanel { background: rgba(249, 248, 255, 0.94); }
+
+    body.green #bookshelfPanel { background: rgba(248, 253, 249, 0.92); }
+    body.parchment #bookshelfPanel { background: rgba(252, 248, 240, 0.94); }
+    body.beige #bookshelfPanel { background: rgba(249, 244, 235, 0.94); }
+    body.pink #bookshelfPanel { background: rgba(255, 248, 248, 0.94); }
+    body.lavender #bookshelfPanel { background: rgba(249, 248, 255, 0.94); }
+
+    #notesPanel h2,
+    #bookshelfPanel h2 {
+      margin: 0 0 22px;
+      font-family: "SF Pro Display", "PingFang SC", -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 28px;
+      line-height: 1.2;
+      letter-spacing: 0;
     }
 
-    body.parchment #notesPanel {
-      background: #f9f3e5;
-      color: #5c4a2c;
-    }
-
-    body.beige #notesPanel {
-      background: #f0e6d2;
-      color: #4a3f2e;
-    }
-
-    body.pink #notesPanel {
-      background: #fff0ef;
-      color: #5a3a3a;
-    }
-
-    body.lavender #notesPanel {
-      background: #f0f0fa;
-      color: #4a4070;
-    }
-
-    #notesPanel h2 {
-      margin-top: 0;
-      color: #007bff;
-      border-bottom: 2px solid #007bff;
-      padding-bottom: 10px;
-    }
-
-    #notesPanel .close-btn {
+    #notesPanel .close-btn,
+    #bookshelfPanel .close-btn {
       position: absolute;
-      top: 15px;
-      right: 15px;
-      background: #dc3545;
-      color: white;
-      border: none;
-      padding: 5px 12px;
-      border-radius: 15px;
-      cursor: pointer;
-      font-size: 14px;
-    }
-
-    #notesPanel .close-btn:hover {
-      background: #c82333;
+      top: 22px;
+      right: 22px;
+      min-height: 36px;
+      padding: 0 14px;
+      color: var(--apple-blue);
+      background: rgba(0, 102, 204, 0.1);
     }
 
     #notesContent {
       white-space: pre-wrap;
-      line-height: 1.6;
+      color: inherit;
       font-size: 14px;
+      line-height: 1.72;
+    }
+
+    #bookshelfContent {
+      display: grid;
+      gap: 12px;
+    }
+
+    .bookshelf-empty {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .book-stat-card {
+      width: 100%;
+      display: grid;
+      gap: 9px;
+      padding: 15px;
+      color: inherit;
+      background: rgba(0, 102, 204, 0.07);
+      border: 1px solid rgba(0, 102, 204, 0.12);
+      border-radius: 8px;
+      text-align: left;
+    }
+
+    .book-stat-card:hover {
+      color: inherit;
+      background: rgba(0, 102, 204, 0.12);
+    }
+
+    .book-stat-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 16px;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
+    .book-stat-meta {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .book-stat-progress {
+      height: 6px;
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.1);
+      border-radius: 999px;
+    }
+
+    .book-stat-progress span {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: var(--apple-blue);
+      border-radius: inherit;
+    }
+
+    body.dark .book-stat-card,
+    body.night-blue .book-stat-card {
+      background: rgba(41, 151, 255, 0.12);
+      border-color: rgba(41, 151, 255, 0.2);
+    }
+
+    body.dark .book-stat-progress,
+    body.night-blue .book-stat-progress {
+      background: rgba(255, 255, 255, 0.16);
     }
 
     .note-entry {
-      margin-bottom: 20px;
-      padding: 15px;
-      background: rgba(0,123,255,0.05);
+      margin-bottom: 18px;
+      padding: 16px;
       border-radius: 8px;
-      border-left: 4px solid #007bff;
+      background: rgba(0, 102, 204, 0.08);
+      border: 1px solid rgba(0, 102, 204, 0.12);
+      font-size: 14px;
     }
 
     .toast {
       position: fixed;
       top: 50%;
       left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(40,167,69,0.95);
-      color: white;
-      padding: 15px 30px;
-      border-radius: 25px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
       z-index: 200;
-      font-size: 16px;
+      transform: translate(-50%, -50%);
+      padding: 13px 22px;
+      border-radius: 999px;
+      color: #fff;
+      background: rgba(29, 29, 31, 0.9);
+      font-size: 14px;
       animation: fadeInOut 2s ease;
+      backdrop-filter: saturate(180%) blur(18px);
+      -webkit-backdrop-filter: saturate(180%) blur(18px);
     }
 
     @keyframes fadeInOut {
-      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-      15% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-      85% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-      100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+      0%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+      15%, 85% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    }
+
+    @media (max-width: 820px) {
+      #menuBar {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 10px 12px;
+      }
+
+      #menuLeft {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        flex: 1 1 100%;
+      }
+
+      #menuRight {
+        flex: 1 1 100%;
+        justify-content: flex-end;
+        gap: 6px;
+      }
+
+      #fontMinus,
+      #fontPlus { width: 38px; }
+
+      #toggleMode {
+        max-width: 116px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      #userInput { width: 100px; }
+
+      #novelPickerMenu {
+        width: calc(100vw - 24px);
+        max-height: 330px;
+      }
+
+      #uploadPanel {
+        right: 15px;
+        bottom: 18px;
+        padding-left: 10px;
+      }
+
+      #uploadPanel span { display: none; }
+
+      select {
+        height: 40px;
+        font-size: 14px;
+      }
+
+      #content {
+        width: min(100% - 30px, var(--reader-width));
+        padding-top: 174px;
+        padding-bottom: 150px;
+        line-height: 1.86;
+      }
+
+      .chapter-block h3 {
+        font-size: 26px;
+        line-height: 1.32;
+      }
+
+      #pageInfo {
+        top: 132px;
+        left: 15px;
+        max-width: calc(100% - 30px);
+      }
+
+      #progressInfo {
+        top: 172px;
+        left: 15px;
+        max-width: calc(100% - 30px);
+      }
+
+      #themeMenu {
+        top: auto;
+        right: 12px;
+        bottom: 84px;
+        width: 188px;
+      }
+
+      #notesBtn {
+        left: 15px;
+        bottom: 18px;
+      }
+
+      #bookshelfBtn {
+        left: 102px;
+        bottom: 18px;
+      }
+
+      #notesPanel,
+      #bookshelfPanel {
+        width: 100%;
+        padding: 78px 20px 30px;
+      }
     }
   </style>
 </head>
@@ -508,38 +830,67 @@
   </div>
 
   <div id="menuBar">
-    <select id="novelSelect">
-      <option value="">📚 选择小说</option>
-      {% for novel in novels %}
-        <option value="{{ novel.filename }}">{{ novel.name }}</option>
-      {% endfor %}
-    </select>
-    <select id="chapterSelect" disabled>
-      <option value="">📖 选择章节</option>
-    </select>
+    <div id="menuLeft">
+      <div id="novelPicker">
+        <button id="novelPickerButton" type="button">
+          <span id="novelPickerLabel">📚 选择小说</span>
+        </button>
+        <div id="novelPickerMenu"></div>
+        <select id="novelSelect">
+          <option value="">📚 选择小说</option>
+          {% for novel in novels %}
+            <option value="{{ novel.filename }}">{{ novel.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <select id="chapterSelect" disabled>
+        <option value="">📖 请先选择小说</option>
+      </select>
+    </div>
+    <div id="menuRight">
+      <div id="controls">
+        <button id="fontMinus">A-</button>
+        <button id="fontPlus">A+</button>
+        <button id="toggleMode">🎨</button>
+      </div>
+      <div id="userSwitcher">
+        <span class="user-label">👤</span>
+        <input id="userInput" type="text" placeholder="用户名" maxlength="20" autocomplete="off">
+      </div>
+    </div>
   </div>
 
-  <div id="controls">
-    <button id="fontMinus">A-</button>
-    <button id="fontPlus">A+</button>
-    <button id="toggleMode">🎨 主题</button>
+  <div id="uploadPanel">
+    <span>添加本地 TXT</span>
+    <button id="uploadBtn">上传小说</button>
+    <input id="uploadInput" type="file" accept=".txt,text/plain">
   </div>
 
-  <!-- 主题选择菜单 -->
   <div id="themeMenu"></div>
 
   <div id="content"></div>
   <div id="loadingIndicator" style="display:none;">加载中...</div>
   <div id="pageInfo"></div>
   <div id="progressInfo"></div>
-  <button id="saveNoteBtn">💾 保存到笔记</button>
-  <button id="notesBtn">📝 我的笔记</button>
+  
+  <button id="saveNoteBtn">💾 存笔记</button>
+  <button id="notesBtn">📝 笔记</button>
+  <button id="bookshelfBtn">📚 书架</button>
   
   <div id="notesPanel">
     <button class="close-btn">✕ 关闭</button>
     <h2>📝 阅读笔记</h2>
     <div id="notesContent">暂无笔记</div>
   </div>
+
+  <div id="bookshelfPanel">
+    <button class="close-btn">✕ 关闭</button>
+    <h2>📚 书架统计</h2>
+    <div id="bookshelfContent">
+      <div class="bookshelf-empty">暂无阅读历史</div>
+    </div>
+  </div>
+
   <script>
     const novelSelect = document.getElementById("novelSelect");
     const chapterSelect = document.getElementById("chapterSelect");
@@ -552,14 +903,31 @@
     const fontPlus = document.getElementById("fontPlus");
     const toggleMode = document.getElementById("toggleMode");
     const themeMenu = document.getElementById("themeMenu");
+    const novelPicker = document.getElementById("novelPicker");
+    const novelPickerButton = document.getElementById("novelPickerButton");
+    const novelPickerLabel = document.getElementById("novelPickerLabel");
+    const novelPickerMenu = document.getElementById("novelPickerMenu");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const uploadInput = document.getElementById("uploadInput");
+    const bookshelfBtn = document.getElementById("bookshelfBtn");
+    const bookshelfPanel = document.getElementById("bookshelfPanel");
+    const bookshelfContent = document.getElementById("bookshelfContent");
+    const userInput = document.getElementById("userInput");
 
     let currentNovel = localStorage.getItem("currentNovel") || "";
+    let currentUser = localStorage.getItem("currentUser") || "default";
     let currentChapter = -1;
     let currentPage = 1;
     let totalPages = 1;
     let totalChapters = 0;
     let loading = false;
-    let fontSize = parseInt(localStorage.getItem("fontSize") || "18");
+
+    // 初始化用户名输入框
+    userInput.value = currentUser;
+    
+    // 根据屏幕宽度设置初始字号
+    let defaultFontSize = window.innerWidth < 768 ? 16 : 18;
+    let fontSize = parseInt(localStorage.getItem("fontSize") || defaultFontSize);
     let autoLoadEnabled = true;
 
     // 主题配置
@@ -582,7 +950,8 @@
     // 初始化样式
     contentDiv.style.fontSize = fontSize + "px";
     document.body.className = themes[currentThemeIndex].name;
-    toggleMode.textContent = themes[currentThemeIndex].icon + " 主题";
+    // 移动端只显示图标，PC端显示文字
+    toggleMode.innerHTML = window.innerWidth < 768 ? themes[currentThemeIndex].icon : themes[currentThemeIndex].icon + " 主题";
 
     // 生成主题菜单
     function createThemeMenu() {
@@ -592,7 +961,6 @@
         </div>`
       ).join('');
 
-      // 绑定点击事件
       themeMenu.querySelectorAll('.theme-option').forEach(option => {
         option.addEventListener('click', (e) => {
           const index = parseInt(e.target.dataset.index);
@@ -607,29 +975,28 @@
       currentThemeIndex = index;
       const theme = themes[currentThemeIndex];
       document.body.className = theme.name;
-      toggleMode.textContent = theme.icon + " 主题";
+      toggleMode.innerHTML = window.innerWidth < 768 ? theme.icon : theme.icon + " 主题";
       localStorage.setItem("theme", theme.name);
       
-      // 更新菜单中的active状态
       themeMenu.querySelectorAll('.theme-option').forEach((option, i) => {
         option.classList.toggle('active', i === index);
       });
     }
 
-    // 主题按钮点击事件
     toggleMode.onclick = (e) => {
       e.stopPropagation();
       themeMenu.classList.toggle('show');
     };
 
-    // 点击其他地方关闭菜单
     document.addEventListener('click', (e) => {
       if (!themeMenu.contains(e.target) && e.target !== toggleMode) {
         themeMenu.classList.remove('show');
       }
+      if (!novelPicker.contains(e.target)) {
+        novelPicker.classList.remove("open");
+      }
     });
 
-    // 初始化主题菜单
     createThemeMenu();
 
     // 更新进度显示
@@ -639,19 +1006,153 @@
         progressBarFill.style.width = "0%";
         return;
       }
-
       const progress = ((currentChapter + 1) / totalChapters * 100).toFixed(1);
       const remaining = (100 - progress).toFixed(1);
-      
       progressInfo.style.display = "block";
-      progressInfo.textContent = `📊 已读 ${progress}% | 剩余 ${remaining}%`;
+      progressInfo.textContent = `📊 已读 ${progress}%`;
       progressBarFill.style.width = progress + "%";
+    }
+
+    function formatChapterOption(title) {
+      const text = title || "";
+      return text.length > 10 ? text.slice(0, 10) + "…" : text;
+    }
+
+    function formatNovelLabel(filename) {
+      return filename ? filename.replace(".txt", "") : "📚 选择小说";
+    }
+
+    function formatLastReadTime(value) {
+      if (!value) return "还未阅读";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+
+      const today = new Date();
+      const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const diffDays = Math.round((startOfToday - startOfDate) / 86400000);
+      const time = date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+
+      if (diffDays === 0) return `今天 ${time}`;
+      if (diffDays === 1) return `昨天 ${time}`;
+      return date.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
+    }
+
+    function setNovelOptions(novels, selectedNovel="") {
+      novelSelect.innerHTML = '<option value="">📚 选择小说</option>';
+      novelPickerMenu.innerHTML = "";
+
+      novels.forEach((novel) => {
+        const option = document.createElement("option");
+        option.value = novel.filename;
+        option.textContent = novel.name;
+        option.title = novel.filename;
+        novelSelect.appendChild(option);
+
+        const row = document.createElement("div");
+        row.className = "novel-picker-row";
+
+        const nameButton = document.createElement("button");
+        nameButton.type = "button";
+        nameButton.className = "novel-picker-name";
+        nameButton.textContent = novel.name;
+        nameButton.title = novel.filename;
+        nameButton.onclick = () => selectNovel(novel.filename);
+
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "novel-delete-btn";
+        deleteButton.textContent = "删除";
+        deleteButton.onclick = (event) => {
+          event.stopPropagation();
+          deleteNovel(novel.filename);
+        };
+
+        row.appendChild(nameButton);
+        row.appendChild(deleteButton);
+        novelPickerMenu.appendChild(row);
+      });
+
+      novelSelect.value = selectedNovel;
+      novelPickerLabel.textContent = formatNovelLabel(selectedNovel);
+    }
+
+    async function refreshNovels(selectedNovel="") {
+      const res = await fetch("/api/novels");
+      const data = await res.json();
+      setNovelOptions(data.novels || [], selectedNovel);
+      return data.novels || [];
+    }
+
+    function hydrateInitialNovels() {
+      const novels = Array.from(novelSelect.options)
+        .filter((option) => option.value)
+        .map((option) => ({
+          filename: option.value,
+          name: option.textContent
+        }));
+      setNovelOptions(novels, currentNovel);
+    }
+
+    function selectNovel(novel) {
+      if (!novel) return;
+      novelPicker.classList.remove("open");
+      novelSelect.value = novel;
+      contentDiv.innerHTML = "";
+      currentChapter = -1;
+      totalChapters = 0;
+      novelPickerLabel.textContent = formatNovelLabel(novel);
+      return loadChapters(novel);
+    }
+
+    async function deleteNovel(novel) {
+      const name = formatNovelLabel(novel);
+      if (!confirm(`确定删除《${name}》吗？`)) return;
+      if (!confirm(`再次确认：删除后小说文件会从本地移除，继续删除《${name}》？`)) return;
+
+      try {
+        const response = await fetch("/api/delete_novel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ novel })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+          showToast("❌ 删除失败");
+          return;
+        }
+
+        localStorage.removeItem(`chapter_${novel}`);
+        if (currentNovel === novel) {
+          localStorage.removeItem("currentNovel");
+          currentNovel = "";
+          currentChapter = -1;
+          currentPage = 1;
+          totalPages = 1;
+          totalChapters = 0;
+          contentDiv.innerHTML = "";
+          chapterSelect.innerHTML = '<option value="">📖 请先选择小说</option>';
+          chapterSelect.disabled = true;
+          pageInfo.textContent = "请选择小说开始阅读 📚";
+          progressInfo.style.display = "none";
+          progressBarFill.style.width = "0%";
+        }
+
+        await refreshNovels(currentNovel);
+        if (bookshelfPanel.classList.contains("show")) {
+          await loadBookshelf();
+        }
+        novelPicker.classList.remove("open");
+        showToast("✅ 已删除");
+      } catch (err) {
+        console.error("删除小说失败:", err);
+        showToast("❌ 删除失败");
+      }
     }
 
     // 加载章节列表
     async function loadChapters(novel) {
       if (!novel) return;
-      
       try {
         const res = await fetch(`/api/chapters?novel=${encodeURIComponent(novel)}`);
         const data = await res.json();
@@ -660,7 +1161,8 @@
         data.chapters.forEach((title, idx) => {
           const option = document.createElement("option");
           option.value = idx;
-          option.textContent = title;
+          option.textContent = formatChapterOption(title);
+          option.title = title;
           chapterSelect.appendChild(option);
         });
         
@@ -668,20 +1170,35 @@
         currentNovel = novel;
         totalChapters = data.total_chapters || data.chapters.length;
         localStorage.setItem("currentNovel", novel);
-        
-        const savedChapter = parseInt(localStorage.getItem(`chapter_${novel}`) || "-1");
-        if (savedChapter >= 0 && savedChapter < data.chapters.length) {
-          currentChapter = savedChapter;
-          chapterSelect.value = savedChapter;
-          pageInfo.textContent = `上次读到：${data.chapters[savedChapter]}`;
+
+        // 从服务端加载用户阅读历史
+        await loadUserChapterHistory(novel);
+      } catch (err) {
+        console.error("加载章节失败:", err);
+        pageInfo.textContent = "⚠️ 加载章节列表失败";
+      }
+    }
+
+    // 从服务端加载当前用户的章节阅读位置
+    async function loadUserChapterHistory(novel) {
+      try {
+        const res = await fetch(`/api/user/history?user=${encodeURIComponent(currentUser)}&novel=${encodeURIComponent(novel)}`);
+        const data = await res.json();
+        const book = data.book;
+        const chapterList = Array.from(chapterSelect.options).filter(o => o.value !== "");
+
+        if (book && Number.isInteger(book.chapter) && book.chapter >= 0 && book.chapter < chapterList.length) {
+          currentChapter = book.chapter;
+          chapterSelect.value = book.chapter;
+          pageInfo.textContent = `上次读到：${chapterList[book.chapter].textContent}`;
           updateProgress();
         } else {
           pageInfo.textContent = "请选择章节开始阅读 📖";
           progressInfo.style.display = "none";
         }
       } catch (err) {
-        console.error("加载章节失败:", err);
-        pageInfo.textContent = "⚠️ 加载章节列表失败";
+        console.warn("加载用户历史失败:", err);
+        pageInfo.textContent = "请选择章节开始阅读 📖";
       }
     }
 
@@ -702,13 +1219,14 @@
 
         const block = document.createElement("div");
         block.className = "chapter-block";
-        
         if (page === 1) {
-          block.innerHTML = `<h3>${data.title}</h3>\n\n${data.content}`;
+          const heading = document.createElement("h3");
+          heading.textContent = data.title || "";
+          block.appendChild(heading);
+          block.appendChild(document.createTextNode("\n\n" + (data.content || "")));
         } else {
-          block.innerHTML = data.content;
+          block.textContent = data.content || "";
         }
-        
         contentDiv.appendChild(block);
 
         currentChapter = chapter;
@@ -718,9 +1236,9 @@
         totalChapters = data.total_chapters || totalChapters;
 
         localStorage.setItem(`chapter_${currentNovel}`, chapter);
-
         updatePageInfo(data.title, hasNextChapter);
         updateProgress();
+        saveReadingHistory(data);
       } catch (err) {
         console.error("加载失败:", err);
         pageInfo.textContent = "⚠️ 加载失败，请重试";
@@ -730,30 +1248,153 @@
       }
     }
 
-    // 更新页面信息
     function updatePageInfo(title, hasNextChapter) {
       let info = `📖 ${title}`;
-      if (totalPages > 1) {
-        info += ` (第 ${currentPage}/${totalPages} 页)`;
-      }
-      if (hasNextChapter && currentPage === totalPages) {
-        info += " - 继续滚动加载下一章";
-      }
+      if (totalPages > 1) info += ` (${currentPage}/${totalPages})`;
       pageInfo.textContent = info;
     }
 
-    // 小说选择
-    novelSelect.onchange = () => {
-      const novel = novelSelect.value;
-      if (!novel) return;
-      
-      contentDiv.innerHTML = "";
-      currentChapter = -1;
-      totalChapters = 0;
-      loadChapters(novel);
+    async function saveReadingHistory(data) {
+      if (!currentNovel || currentChapter < 0 || totalChapters < 1) return;
+      try {
+        await fetch("/api/reading_history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            novel: currentNovel,
+            chapter: currentChapter,
+            chapter_title: data.title || "",
+            page: currentPage,
+            total_pages: totalPages,
+            total_chapters: totalChapters,
+            user: currentUser
+          })
+        });
+      } catch (err) {
+        console.warn("保存阅读历史失败:", err);
+      }
+    }
+
+    async function openBookFromHistory(book) {
+      bookshelfPanel.classList.remove("show");
+      await selectNovel(book.filename);
+      const targetChapter = Number.isInteger(book.last_chapter) ? book.last_chapter : 0;
+      chapterSelect.value = targetChapter;
+      await loadChapter(targetChapter, 1, false);
+      window.scrollTo(0, 0);
+    }
+
+    function renderBookshelf(books) {
+      if (!books.length) {
+        bookshelfContent.innerHTML = '<div class="bookshelf-empty">暂无阅读历史</div>';
+        return;
+      }
+
+      bookshelfContent.innerHTML = "";
+      books.forEach((book) => {
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "book-stat-card";
+        card.title = book.filename;
+
+        const progress = Math.max(0, Math.min(Number(book.progress_percent) || 0, 100));
+        const chapterText = book.last_chapter_title || "尚未开始阅读";
+        const totalText = book.total_chapters ? `共 ${book.total_chapters} 章` : "章节数未知";
+
+        const title = document.createElement("div");
+        title.className = "book-stat-title";
+        title.textContent = book.name;
+
+        const progressBar = document.createElement("div");
+        progressBar.className = "book-stat-progress";
+        const progressFill = document.createElement("span");
+        progressFill.style.width = progress + "%";
+        progressBar.appendChild(progressFill);
+
+        const progressMeta = document.createElement("div");
+        progressMeta.className = "book-stat-meta";
+        progressMeta.textContent = `已读 ${progress.toFixed(1)}% · ${totalText}`;
+
+        const chapterMeta = document.createElement("div");
+        chapterMeta.className = "book-stat-meta";
+        chapterMeta.textContent = `上次：${chapterText}`;
+
+        const timeMeta = document.createElement("div");
+        timeMeta.className = "book-stat-meta";
+        timeMeta.textContent = `最后阅读：${formatLastReadTime(book.last_read_at)}`;
+
+        card.appendChild(title);
+        card.appendChild(progressBar);
+        card.appendChild(progressMeta);
+        card.appendChild(chapterMeta);
+        card.appendChild(timeMeta);
+
+        card.onclick = () => openBookFromHistory(book);
+        bookshelfContent.appendChild(card);
+      });
+    }
+
+    async function loadBookshelf() {
+      try {
+        bookshelfContent.innerHTML = '<div class="bookshelf-empty">加载中...</div>';
+        const response = await fetch(`/api/bookshelf?user=${encodeURIComponent(currentUser)}`);
+        const data = await response.json();
+        renderBookshelf(data.books || []);
+      } catch (err) {
+        console.error("加载书架失败:", err);
+        bookshelfContent.innerHTML = '<div class="bookshelf-empty">⚠️ 加载书架失败</div>';
+      }
+    }
+
+    // 用户切换：回车或失焦时生效
+    async function switchUser() {
+      const newUser = userInput.value.trim() || "default";
+      if (newUser === currentUser) return;
+      currentUser = newUser;
+      localStorage.setItem("currentUser", currentUser);
+      showToast(`已切换到用户：${currentUser}`);
+
+      // 重新加载书架
+      if (bookshelfPanel.classList.contains("show")) {
+        await loadBookshelf();
+      }
+
+      // 如果已选中小说，重新加载该用户的阅读位置
+      if (currentNovel) {
+        await loadUserChapterHistory(currentNovel);
+      }
+    }
+
+    userInput.addEventListener("keydown", async (e) => {
+      if (e.key === "Enter") {
+        userInput.blur();
+        await switchUser();
+      }
+    });
+
+    userInput.addEventListener("blur", async () => {
+      await switchUser();
+    });
+
+    bookshelfBtn.onclick = async () => {
+      bookshelfPanel.classList.add("show");
+      notesPanel.classList.remove("show");
+      await loadBookshelf();
     };
 
-    // 章节选择
+    bookshelfPanel.querySelector(".close-btn").onclick = () => {
+      bookshelfPanel.classList.remove("show");
+    };
+
+    novelSelect.onchange = () => {
+      selectNovel(novelSelect.value);
+    };
+
+    novelPickerButton.onclick = (e) => {
+      e.stopPropagation();
+      novelPicker.classList.toggle("open");
+    };
+
     chapterSelect.onchange = () => {
       const idx = parseInt(chapterSelect.value);
       if (isNaN(idx)) return;
@@ -761,14 +1402,12 @@
       window.scrollTo(0, 0);
     };
 
-    // 滚动加载
     window.addEventListener("scroll", () => {
       if (!autoLoadEnabled || loading || currentChapter < 0) return;
-      
       const scrollBottom = window.innerHeight + window.scrollY;
       const documentHeight = document.body.offsetHeight;
       
-      if (scrollBottom >= documentHeight - 200) {
+      if (scrollBottom >= documentHeight - 300) {
         if (currentPage < totalPages) {
           loadChapter(currentChapter, currentPage + 1, true);
         } else {
@@ -781,7 +1420,6 @@
       }
     });
 
-    // 字号调节
     fontMinus.onclick = () => {
       fontSize = Math.max(12, fontSize - 2);
       contentDiv.style.fontSize = fontSize + "px";
@@ -794,13 +1432,60 @@
       localStorage.setItem("fontSize", fontSize);
     };
 
-    // 初始化
+    uploadBtn.onclick = () => {
+      uploadInput.click();
+    };
+
+    uploadInput.onchange = async () => {
+      const file = uploadInput.files && uploadInput.files[0];
+      if (!file) return;
+      if (!file.name.endsWith(".txt")) {
+        showToast("⚠️ 只能上传 TXT 小说");
+        uploadInput.value = "";
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("novel", file);
+
+      try {
+        const response = await fetch("/api/upload_novel", {
+          method: "POST",
+          body: formData
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+          showToast(data.error === "novel already exists" ? "⚠️ 小说已存在" : "❌ 上传失败");
+          return;
+        }
+
+        await refreshNovels(data.novel.filename);
+        contentDiv.innerHTML = "";
+        chapterSelect.innerHTML = '<option value="">📖 选择章节</option>';
+        chapterSelect.disabled = true;
+        currentChapter = -1;
+        totalChapters = 0;
+        await loadChapters(data.novel.filename);
+        pageInfo.textContent = "上传成功，请选择章节 📖";
+        showToast("✅ 上传成功");
+      } catch (err) {
+        console.error("上传小说失败:", err);
+        showToast("❌ 上传失败");
+      } finally {
+        uploadInput.value = "";
+      }
+    };
+
+    hydrateInitialNovels();
+
     if (currentNovel) {
       novelSelect.value = currentNovel;
+      novelPickerLabel.textContent = formatNovelLabel(currentNovel);
       loadChapters(currentNovel);
     } else {
       pageInfo.textContent = "请选择小说开始阅读 📚";
     }
+
     // ============ 笔记功能 ============
     const saveNoteBtn = document.getElementById("saveNoteBtn");
     const notesBtn = document.getElementById("notesBtn");
@@ -809,67 +1494,52 @@
     let selectedText = "";
     let selectedChapterTitle = "";
 
-    // 文本选择事件
     document.addEventListener("mouseup", (e) => {
-  // 如果点击的是保存按钮本身,不处理
-  if (e.target === saveNoteBtn || saveNoteBtn.contains(e.target)) {
-    return;
-  }
-  
-  const selection = window.getSelection();
-  const text = selection.toString().trim();
-  
-  if (text.length > 0 && currentChapter >= 0) {
-    selectedText = text;
-    selectedChapterTitle = chapterSelect.options[chapterSelect.selectedIndex]?.text || `第${currentChapter + 1}章`;
-    
-    // 显示保存按钮在选中文本附近
-    const range = selection.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    
-    // 计算按钮位置,确保在视口内
-    let left = rect.left + rect.width / 2 - 60;
-    let top = rect.bottom + 10;
-    
-    // 防止按钮超出左右边界
-    const btnWidth = 120;
-    if (left < 10) left = 10;
-    if (left + btnWidth > window.innerWidth - 10) {
-      left = window.innerWidth - btnWidth - 10;
-    }
-    
-    // 如果选中文本在视口底部,按钮显示在上方
-    if (top > window.innerHeight - 60) {
-      top = rect.top - 45;
-    }
-    
-    saveNoteBtn.style.display = "block";
-    saveNoteBtn.style.left = left + "px";
-    saveNoteBtn.style.top = top + "px";
-    saveNoteBtn.style.position = "fixed"; // 使用 fixed 定位,相对于视口
-  } else {
-    saveNoteBtn.style.display = "none";
-  }
-});
+      if (e.target === saveNoteBtn || saveNoteBtn.contains(e.target)) return;
+      
+      const selection = window.getSelection();
+      const text = selection.toString().trim();
+      
+      if (text.length > 0 && currentChapter >= 0) {
+        selectedText = text;
+        const selectedOption = chapterSelect.options[chapterSelect.selectedIndex];
+        selectedChapterTitle = selectedOption?.title || selectedOption?.text || `第${currentChapter + 1}章`;
+        
+        // 移动端/桌面端统一处理位置
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        
+        let left = rect.left + rect.width / 2 - 60;
+        let top = rect.bottom + 15;
+        
+        // 边界检查
+        if (left < 10) left = 10;
+        if (left + 120 > window.innerWidth) left = window.innerWidth - 130;
+        
+        // 如果在底部，向上显示
+        if (top > window.innerHeight - 60) top = rect.top - 50;
 
-// 优化点击其他地方隐藏按钮的逻辑
-document.addEventListener("mousedown", (e) => {
-  // 如果点击的是保存按钮,不隐藏
-  if (e.target === saveNoteBtn || saveNoteBtn.contains(e.target)) {
-    return;
-  }
-  
-  // 延迟检查,给 mouseup 事件时间执行
-  setTimeout(() => {
-    const selection = window.getSelection();
-    // 如果没有选中文本,隐藏按钮
-    if (!selection.toString().trim()) {
-      saveNoteBtn.style.display = "none";
-    }
-  }, 100);
-});
+        saveNoteBtn.style.display = "block";
+        saveNoteBtn.style.left = left + "px";
+        saveNoteBtn.style.top = top + "px";
+      } else {
+        saveNoteBtn.style.display = "none";
+      }
+    });
 
-    // 点击其他地方隐藏按钮
+    // 移动端触摸选择处理
+    document.addEventListener("touchend", (e) => {
+      setTimeout(() => {
+        const selection = window.getSelection();
+        if (selection.toString().trim().length > 0) {
+            // 逻辑同 mouseup，因为 selection API 在 touch 设备通常也工作
+            // 但有时需要小延迟
+        } else {
+           saveNoteBtn.style.display = "none"; 
+        }
+      }, 200);
+    });
+
     document.addEventListener("mousedown", (e) => {
       if (e.target !== saveNoteBtn && !saveNoteBtn.contains(e.target)) {
         setTimeout(() => {
@@ -880,67 +1550,55 @@ document.addEventListener("mousedown", (e) => {
       }
     });
 
-    // 保存笔记
     saveNoteBtn.onclick = async () => {
       if (!selectedText || !currentNovel) return;
-      
       try {
         const response = await fetch("/api/save_note", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             novel: currentNovel,
             chapter_title: selectedChapterTitle,
             content: selectedText
           })
         });
-        
         const data = await response.json();
-        
         if (data.success) {
-          showToast("✅ 笔记保存成功！");
+          showToast("✅ 笔记已保存");
           saveNoteBtn.style.display = "none";
           window.getSelection().removeAllRanges();
         } else {
-          showToast("❌ 保存失败，请重试");
+          showToast("❌ 保存失败");
         }
       } catch (err) {
         console.error("保存笔记失败:", err);
-        showToast("❌ 保存失败，请重试");
+        showToast("❌ 保存失败");
       }
     };
 
-    // 打开笔记面板
     notesBtn.onclick = async () => {
       if (!currentNovel) {
         showToast("⚠️ 请先选择小说");
         return;
       }
-      
       notesPanel.classList.add("show");
       await loadNotes();
     };
 
-    // 关闭笔记面板
     notesPanel.querySelector(".close-btn").onclick = () => {
       notesPanel.classList.remove("show");
     };
 
-    // 加载笔记
     async function loadNotes() {
       try {
         const response = await fetch(`/api/get_notes?novel=${encodeURIComponent(currentNovel)}`);
         const data = await response.json();
-        
         if (data.exists && data.notes) {
           notesContent.textContent = data.notes;
         } else {
-          notesContent.textContent = `📖 暂无笔记\n\n在阅读时选中文字，点击${saveNoteBtn.textContent}按钮即可添加笔记。`;
+          notesContent.textContent = "暂无笔记";
         }
       } catch (err) {
-        console.error("加载笔记失败:", err);
         notesContent.textContent = "⚠️ 加载笔记失败";
       }
     }

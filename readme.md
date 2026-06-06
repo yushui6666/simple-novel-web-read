@@ -1,66 +1,108 @@
-# 📖 小说阅读器
+# Simple Novel Web Read
 
-基于 Flask 的在线小说阅读器，支持多本小说管理、在线搜索与一键下载。
+一个轻量的本地 Web 小说阅读器，基于 Flask 构建。项目支持 TXT 小说书架、章节解析、分页阅读、阅读进度保存、笔记记录，以及从 txt80.cc 搜索并下载 TXT 小说。
 
-## 功能特点
+## 功能
 
-- 📚 **多小说管理**：支持从 `novel` 文件夹读取多本小说  
-- 📖 **自动章节识别**：智能识别章节标题  
-- 🔄 **无缝滚动加载**：自动加载下一页/下一章  
-- 🌙 **夜间模式**：护眼深色主题  
-- 🔤 **字号调节**：自由调整阅读字体大小  
-- 💾 **阅读进度记忆**：自动保存每本书的阅读位置  
-- 💾 **笔记保存**：总有让你思绪激荡的文字
-- 🌐 **小说爬取与一键下载**（新增）：
-  - 支持输入小说名在线搜索  
-  - 自动爬取章节并生成 `.txt` 小说文件  
-  - 一键保存到 `novel/` 文件夹并可直接阅读
+- TXT 书架：读取 `novel/` 目录中的小说文件，并在页面中切换阅读。
+- 智能章节解析：支持常见的“第 X 章 / 第 X 回 / 卷 / 序章 / 番外”等章节标题格式。
+- 分页阅读：每次加载固定字数，支持章节和页码切换。
+- 阅读进度：按用户保存每本书的章节、页码、总章节数和阅读进度。
+- 笔记功能：可按小说追加保存章节笔记到 `notes/` 目录。
+- 小说管理：支持上传 TXT 小说，也支持从书架中删除小说。
+- 小说下载器：`search.py` 可搜索并下载 TXT 小说，同时尝试修复编码为 UTF-8。
+- 一键脚本：`server.sh` 支持启动、停止、重启和查看运行状态。
 
-## 安装使用
+## 项目结构
 
-1. 克隆项目
-```bash
-git clone https://github.com/你的用户名/novel-reader.git
-cd novel-reader
+```text
+.
+├── app.py                  # Flask 阅读器主程序
+├── search.py               # TXT 小说搜索与下载工具
+├── server.sh               # 本地服务启停脚本
+├── templates/
+│   └── read.html           # 阅读器页面
+├── novel/                  # TXT 小说目录
+├── notes/                  # 阅读笔记目录
+├── tests/                  # 单元测试
+├── requirements.txt        # Python 依赖
+└── README.md
 ```
 
-2. 安装依赖
+## 环境要求
+
+- Python 3.10+
+- macOS、Linux 或 Windows 均可运行
+
+## 安装
+
 ```bash
-pip install flask requests beautifulsoup4
+git clone https://github.com/yushui6666/simple-novel-web-read.git
+cd simple-novel-web-read
+
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-3. 添加小说文件（可选）
-将 `.txt` 格式的小说文件放入 `novel` 文件夹，或使用搜索功能自动下载。
+Windows PowerShell 可使用：
 
-4. 运行项目
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+## 运行
+
+直接运行：
+
 ```bash
 python app.py
 ```
 
-5. 打开浏览器访问
+然后访问：
+
+```text
+http://127.0.0.1:6066
 ```
-http://127.0.0.1:5000
+
+macOS/Linux 也可以使用脚本：
+
+```bash
+chmod +x server.sh
+./server.sh start
+./server.sh status
+./server.sh stop
 ```
 
-## 使用说明
+## 使用
 
-- 在首页输入小说名称并点击「🔍 搜索」即可在线查找小说  
-- 在搜索结果中点击「📥 下载」按钮即可自动爬取并保存小说  
-- 下载完成后，小说会出现在阅读列表中，可直接打开阅读  
+1. 将 `.txt` 小说放入 `novel/` 目录，或在页面中上传 TXT 文件。
+2. 打开 `http://127.0.0.1:6066`。
+3. 选择小说开始阅读。
+4. 阅读器会自动保存当前用户的阅读进度。
+5. 需要记录想法时，可使用笔记功能，内容会写入 `notes/`。
 
-## 小说格式要求
+## 下载小说
 
-小说需要包含章节标题，格式如：
-- 第1章 标题
-- 第一章 标题
-- 第十二章 标题
+运行下载器：
 
-## 技术栈
+```bash
+python search.py
+```
 
-- **后端**：Flask (Python)  
-- **前端**：原生 JavaScript + HTML5 + CSS3  
-- **爬虫模块**：Requests + BeautifulSoup4  
+按提示输入小说名称，选择搜索结果后会下载到 `novel/` 目录。下载完成后刷新阅读器页面即可看到新书。
 
----
+## 测试
 
-📌 *本项目仅供学习交流使用，请勿用于任何商业或侵权行为。*
+```bash
+python -m unittest discover -s tests
+```
+
+## 注意事项
+
+- `reading_history.json` 是本地阅读进度文件，默认不会提交到仓库。
+- `app.log`、虚拟环境、缓存、打包产物和本地快捷方式默认不会提交。
+- 小说文本和笔记是否提交取决于个人使用场景；本项目保留 `novel/` 和 `notes/` 目录作为阅读器内容目录。
+- 下载功能仅供学习和个人研究使用，请遵守目标网站规则和版权要求。
