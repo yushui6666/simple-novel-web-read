@@ -1151,7 +1151,7 @@
     }
 
     // 加载章节列表
-    async function loadChapters(novel) {
+    async function loadChapters(novel, options={}) {
       if (!novel) return;
       try {
         const res = await fetch(`/api/chapters?novel=${encodeURIComponent(novel)}`);
@@ -1172,7 +1172,10 @@
         localStorage.setItem("currentNovel", novel);
 
         // 从服务端加载用户阅读历史
-        await loadUserChapterHistory(novel);
+        const book = await loadUserChapterHistory(novel);
+        if (options.restoreLastRead) {
+          await restoreLastReadChapter(novel, book);
+        }
       } catch (err) {
         console.error("加载章节失败:", err);
         pageInfo.textContent = "⚠️ 加载章节列表失败";
@@ -1192,14 +1195,37 @@
           chapterSelect.value = book.chapter;
           pageInfo.textContent = `上次读到：${chapterList[book.chapter].textContent}`;
           updateProgress();
+          return book;
         } else {
           pageInfo.textContent = "请选择章节开始阅读 📖";
           progressInfo.style.display = "none";
+          return null;
         }
       } catch (err) {
         console.warn("加载用户历史失败:", err);
         pageInfo.textContent = "请选择章节开始阅读 📖";
+        return null;
       }
+    }
+
+    async function restoreLastReadChapter(novel, book) {
+      const chapterList = Array.from(chapterSelect.options).filter(o => o.value !== "");
+      let targetChapter = book && Number.isInteger(book.chapter) ? book.chapter : null;
+
+      if (targetChapter === null) {
+        const storedChapter = parseInt(localStorage.getItem(`chapter_${novel}`), 10);
+        if (!Number.isNaN(storedChapter)) {
+          targetChapter = storedChapter;
+        }
+      }
+
+      if (!Number.isInteger(targetChapter) || targetChapter < 0 || targetChapter >= chapterList.length) {
+        return;
+      }
+
+      chapterSelect.value = targetChapter;
+      await loadChapter(targetChapter, 1, false);
+      window.scrollTo(0, 0);
     }
 
     // 加载章节内容
@@ -1481,7 +1507,7 @@
     if (currentNovel) {
       novelSelect.value = currentNovel;
       novelPickerLabel.textContent = formatNovelLabel(currentNovel);
-      loadChapters(currentNovel);
+      loadChapters(currentNovel, { restoreLastRead: true });
     } else {
       pageInfo.textContent = "请选择小说开始阅读 📚";
     }
