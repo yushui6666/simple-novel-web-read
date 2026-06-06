@@ -33,6 +33,45 @@ else:
 
 HISTORY_FILE = os.path.join(APP_DATA_FOLDER, "reading_history.json")
 
+def _normalize_username(username):
+    """Return a stable folder-safe username."""
+    if not username or not isinstance(username, str):
+        return "default"
+    username = username.strip() or "default"
+    username = re.sub(r"[^\w\u4e00-\u9fff.-]+", "_", username, flags=re.UNICODE).strip("._")
+    return (username or "default")[:80]
+
+def _get_user_folder(root_folder, username):
+    safe_user = _normalize_username(username)
+    base_dir = os.path.abspath(root_folder)
+    folder = os.path.abspath(os.path.join(base_dir, safe_user))
+    if os.path.commonpath([base_dir, folder]) != base_dir:
+        return None
+    return folder
+
+def _migrate_default_novels_once(folder):
+    """Move legacy root-level novels into the default user's bookshelf."""
+    if _normalize_username("default") != os.path.basename(os.path.abspath(folder)):
+        return
+    root_dir = os.path.abspath(NOVEL_FOLDER)
+    user_dir = os.path.abspath(folder)
+    if root_dir == user_dir or not os.path.isdir(root_dir):
+        return
+
+    legacy_files = [
+        filename for filename in os.listdir(root_dir)
+        if filename.endswith(".txt") and os.path.isfile(os.path.join(root_dir, filename))
+    ]
+    if not legacy_files:
+        return
+
+    os.makedirs(user_dir, exist_ok=True)
+    for filename in legacy_files:
+        source = os.path.join(root_dir, filename)
+        target = os.path.join(user_dir, filename)
+        if not os.path.exists(target):
+            os.replace(source, target)
+
 def _safe_txt_path(folder, filename):
     """Return a safe txt file path inside folder, or None for invalid input."""
     if not filename or not isinstance(filename, str):
@@ -48,23 +87,35 @@ def _safe_txt_path(folder, filename):
         return None
     return filepath
 
-def _get_novel_path(filename):
-    return _safe_txt_path(NOVEL_FOLDER, filename)
+def _get_novel_folder(username="default"):
+    folder = _get_user_folder(NOVEL_FOLDER, username)
+    if folder and _normalize_username(username) == "default":
+        _migrate_default_novels_once(folder)
+    return folder
 
-def _clean_upload_filename(filename):
+def _get_novel_path(filename, username="default"):
+    folder = _get_novel_folder(username)
+    if not folder:
+        return None
+    return _safe_txt_path(folder, filename)
+
+def _clean_upload_filename(filename, username="default"):
     """Keep readable names while preventing path traversal and non-txt uploads."""
     if not filename or not isinstance(filename, str):
         return None
     filename = os.path.basename(filename).replace("\x00", "").strip()
     if not filename.endswith(".txt"):
         return None
-    return filename if _get_novel_path(filename) else None
+    return filename if _get_novel_path(filename, username) else None
 
-def _get_note_path(novel):
-    if not _get_novel_path(novel):
+def _get_note_path(novel, username="default"):
+    if not _get_novel_path(novel, username):
+        return None
+    notes_folder = _get_user_folder(NOTES_FOLDER, username)
+    if not notes_folder:
         return None
     note_filename = f"{novel[:-4]}_笔记.txt"
-    return _safe_txt_path(NOTES_FOLDER, note_filename)
+    return _safe_txt_path(notes_folder, note_filename)
 
 def _parse_int_arg(name, default):
     raw_value = request.args.get(name)
@@ -101,8 +152,7 @@ def _load_all_users():
 
 def _load_user_history(username):
     """加载指定用户的阅读历史"""
-    if not username or not isinstance(username, str):
-        username = "default"
+    username = _normalize_username(username)
     data = _load_all_users()
     user_data = data["users"].get(username, {"books": {}})
     if not isinstance(user_data, dict) or not isinstance(user_data.get("books"), dict):
@@ -112,8 +162,7 @@ def _load_user_history(username):
 
 def _save_user_history(username, user_history):
     """保存指定用户的阅读历史"""
-    if not username or not isinstance(username, str):
-        username = "default"
+    username = _normalize_username(username)
     data = _load_all_users()
     if not isinstance(user_history, dict) or not isinstance(user_history.get("books"), dict):
         user_history = {"books": {}}
@@ -129,12 +178,12 @@ def _save_all_users(data):
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-def _remove_history_for_novel(novel):
-    """从所有用户中移除指定小说的阅读历史"""
+def _remove_history_for_novel(novel, username):
+    """从指定用户中移除指定小说的阅读历史"""
     data = _load_all_users()
-    for username in data["users"]:
-        if novel in data["users"][username].get("books", {}):
-            data["users"][username]["books"].pop(novel, None)
+    username = _normalize_username(username)
+    if username in data["users"]:
+        data["users"][username].get("books", {}).pop(novel, None)
     _save_all_users(data)
 
 def _calc_progress_percent(chapter, total_chapters):
@@ -161,15 +210,18 @@ def _build_bookshelf_item(novel, username="default"):
         "last_read_at": history.get("last_read_at", ""),
     }
 
-def get_novels():
+def get_novels(username="default"):
     """获取所有小说文件列表"""
-    if not os.path.exists(NOVEL_FOLDER):
-        os.makedirs(NOVEL_FOLDER)
+    folder = _get_novel_folder(username)
+    if not folder:
+        return []
+    if not os.path.exists(folder):
+        os.makedirs(folder)
         return []
     
     novels = []
-    for filename in sorted(os.listdir(NOVEL_FOLDER)):
-        filepath = _get_novel_path(filename)
+    for filename in sorted(os.listdir(folder)):
+        filepath = _get_novel_path(filename, username)
         if filepath and os.path.isfile(filepath):
             novels.append({
                 'filename': filename,
@@ -177,9 +229,9 @@ def get_novels():
             })
     return novels
 
-def parse_novel(filename):
+def parse_novel(filename, username="default"):
     """万能小说章节解析：适配常见TXT章节格式；匹配不到则按字数分页降级"""
-    filepath = _get_novel_path(filename)
+    filepath = _get_novel_path(filename, username)
     if not filepath or not os.path.exists(filepath):
         raise FileNotFoundError(filename)
 
@@ -276,33 +328,35 @@ def parse_novel(filename):
 @app.route("/")
 def index():
     """主页面"""
-    novels = get_novels()
+    novels = get_novels("default")
     return render_template("read.html", novels=novels) 
 
 @app.route("/api/novels")
 def api_novels():
     """返回小说列表"""
-    novels = get_novels()
-    return jsonify({"novels": novels})
+    username = request.args.get("user", "default")
+    novels = get_novels(username)
+    return jsonify({"novels": novels, "user": _normalize_username(username)})
 
 @app.route("/api/upload_novel", methods=["POST"])
 def upload_novel():
     """上传TXT小说到novel目录"""
+    username = request.form.get("user", "default")
     upload = request.files.get("novel")
     if not upload:
         return jsonify({"error": "missing file"}), 400
 
-    filename = _clean_upload_filename(upload.filename)
+    filename = _clean_upload_filename(upload.filename, username)
     if not filename:
         return jsonify({"error": "only .txt files are supported"}), 400
 
-    filepath = _get_novel_path(filename)
+    filepath = _get_novel_path(filename, username)
     if not filepath:
         return jsonify({"error": "invalid filename"}), 400
     if os.path.exists(filepath):
         return jsonify({"error": "novel already exists"}), 409
 
-    os.makedirs(NOVEL_FOLDER, exist_ok=True)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
     upload.save(filepath)
     _PARSE_CACHE.pop(os.path.abspath(filepath), None)
 
@@ -319,7 +373,8 @@ def delete_novel():
     """删除novel目录中的指定小说"""
     data = request.get_json(silent=True) or {}
     novel = data.get("novel", "")
-    filepath = _get_novel_path(novel)
+    username = data.get("user", "default")
+    filepath = _get_novel_path(novel, username)
     if not filepath:
         return jsonify({"error": "invalid novel"}), 400
     if not os.path.exists(filepath):
@@ -327,15 +382,15 @@ def delete_novel():
 
     os.remove(filepath)
     _PARSE_CACHE.pop(os.path.abspath(filepath), None)
-    _remove_history_for_novel(novel)
+    _remove_history_for_novel(novel, username)
 
     return jsonify({"success": True, "deleted": novel})
 
 @app.route("/api/bookshelf")
 def api_bookshelf():
     """返回书架阅读统计，按最近阅读时间排序"""
-    username = request.args.get("user", "default").strip() or "default"
-    books = [_build_bookshelf_item(novel, username) for novel in get_novels()]
+    username = _normalize_username(request.args.get("user", "default"))
+    books = [_build_bookshelf_item(novel, username) for novel in get_novels(username)]
     books.sort(key=lambda item: (bool(item.get("last_read_at")), item.get("last_read_at") or ""), reverse=True)
     return jsonify({"books": books, "user": username})
 
@@ -344,7 +399,8 @@ def save_reading_history():
     """保存当前小说的阅读历史"""
     data = request.get_json(silent=True) or {}
     novel = data.get("novel", "")
-    filepath = _get_novel_path(novel)
+    username = _normalize_username(data.get("user", "default"))
+    filepath = _get_novel_path(novel, username)
     if not filepath:
         return jsonify({"error": "invalid novel"}), 400
     if not os.path.exists(filepath):
@@ -362,7 +418,6 @@ def save_reading_history():
         return jsonify({"error": "invalid history"}), 400
 
     chapter_title = str(data.get("chapter_title", "")).strip()
-    username = data.get("user", "default").strip() or "default"
     user_history = _load_user_history(username)
     user_history["books"][novel] = {
         "novel": novel,
@@ -389,7 +444,7 @@ def api_user_list():
 @app.route("/api/user/history")
 def api_user_history():
     """返回指定用户对指定小说的阅读历史"""
-    username = request.args.get("user", "default").strip() or "default"
+    username = _normalize_username(request.args.get("user", "default"))
     novel = request.args.get("novel", "")
     user_history = _load_user_history(username)
     book = user_history["books"].get(novel)
@@ -399,14 +454,15 @@ def api_user_history():
 def api_chapters():
     """返回指定小说的章节列表"""
     novel = request.args.get("novel", "")
-    filepath = _get_novel_path(novel)
+    username = request.args.get("user", "default")
+    filepath = _get_novel_path(novel, username)
     if not filepath:
         return jsonify({"error": "invalid novel"}), 400
 
     if not os.path.exists(filepath):
         return jsonify({"error": "novel not found"}), 404
     
-    chapters = parse_novel(novel)
+    chapters = parse_novel(novel, username)
     return jsonify({
         "novel": novel,
         "chapters": [c["title"] for c in chapters],
@@ -416,16 +472,19 @@ def api_chapters():
 def debug_files():
     """调试：显示所有文件详情"""
     import os
+    username = request.args.get("user", "default")
+    folder = _get_novel_folder(username)
     
     result = {
-        "folder": NOVEL_FOLDER,
-        "exists": os.path.exists(NOVEL_FOLDER),
+        "folder": folder,
+        "user": _normalize_username(username),
+        "exists": bool(folder and os.path.exists(folder)),
         "all_files": []
     }
     
-    if os.path.exists(NOVEL_FOLDER):
-        for filename in os.listdir(NOVEL_FOLDER):
-            filepath = os.path.join(NOVEL_FOLDER, filename)
+    if folder and os.path.exists(folder):
+        for filename in os.listdir(folder):
+            filepath = os.path.join(folder, filename)
             result["all_files"].append({
                 "name": filename,
                 "is_file": os.path.isfile(filepath),
@@ -440,10 +499,11 @@ def debug_files():
 def api_chapter():
     """返回章节内容（分页）"""
     novel = request.args.get("novel", "")
+    username = request.args.get("user", "default")
     idx = _parse_int_arg("id", 0)
     page = _parse_int_arg("page", 1)
     
-    filepath = _get_novel_path(novel)
+    filepath = _get_novel_path(novel, username)
     if not filepath:
         return jsonify({"error": "invalid novel"}), 400
     if idx is None or page is None or idx < 0 or page < 1:
@@ -452,7 +512,7 @@ def api_chapter():
     if not os.path.exists(filepath):
         return jsonify({"error": "novel not found"}), 404
     
-    chapters = parse_novel(novel)
+    chapters = parse_novel(novel, username)
     
     if idx >= len(chapters):
         return jsonify({"error": "invalid chapter"}), 404
@@ -488,16 +548,16 @@ def save_note():
     """保存笔记"""
     data = request.get_json(silent=True) or {}
     novel = data.get("novel", "")
+    username = data.get("user", "default")
     chapter_title = data.get("chapter_title", "")
     content = data.get("content", "")
     
-    note_filepath = _get_note_path(novel)
+    note_filepath = _get_note_path(novel, username)
     if not note_filepath or not content:
         return jsonify({"error": "invalid data"}), 400
     
     # 确保笔记文件夹存在
-    if not os.path.exists(NOTES_FOLDER):
-        os.makedirs(NOTES_FOLDER)
+    os.makedirs(os.path.dirname(note_filepath), exist_ok=True)
     
     # 笔记文件名：小说名_笔记.txt
     note_filename = os.path.basename(note_filepath)
@@ -527,7 +587,8 @@ def save_note():
 def get_notes():
     """获取笔记内容"""
     novel = request.args.get("novel", "")
-    note_filepath = _get_note_path(novel)
+    username = request.args.get("user", "default")
+    note_filepath = _get_note_path(novel, username)
     if not note_filepath:
         return jsonify({"error": "invalid novel"}), 400
     
