@@ -526,6 +526,18 @@
       background: #2f8f62;
     }
 
+    #downloadPageBtn {
+      position: fixed;
+      left: 214px;
+      bottom: 24px;
+      z-index: 35;
+      color: #181a20;
+      background: #fcd535;
+      box-shadow: 0 12px 30px rgba(252, 213, 53, 0.2);
+    }
+
+    #downloadPageBtn:hover { background: #f0b90b; }
+
     #saveNoteBtn {
       position: fixed;
       display: none;
@@ -815,6 +827,11 @@
         bottom: 18px;
       }
 
+      #downloadPageBtn {
+        left: 190px;
+        bottom: 18px;
+      }
+
       #notesPanel,
       #bookshelfPanel {
         width: 100%;
@@ -876,6 +893,7 @@
   <button id="saveNoteBtn">💾 存笔记</button>
   <button id="notesBtn">📝 笔记</button>
   <button id="bookshelfBtn">📚 书架</button>
+  <button id="downloadPageBtn">下载</button>
   
   <div id="notesPanel">
     <button class="close-btn">✕ 关闭</button>
@@ -910,6 +928,7 @@
     const uploadBtn = document.getElementById("uploadBtn");
     const uploadInput = document.getElementById("uploadInput");
     const bookshelfBtn = document.getElementById("bookshelfBtn");
+    const downloadPageBtn = document.getElementById("downloadPageBtn");
     const bookshelfPanel = document.getElementById("bookshelfPanel");
     const bookshelfContent = document.getElementById("bookshelfContent");
     const userInput = document.getElementById("userInput");
@@ -1591,6 +1610,10 @@
       bookshelfPanel.classList.add("show");
       notesPanel.classList.remove("show");
       await loadBookshelf();
+    };
+
+    downloadPageBtn.onclick = () => {
+      window.location.href = `/download?user=${encodeURIComponent(currentUser)}`;
     };
 
     bookshelfPanel.querySelector(".close-btn").onclick = () => {
