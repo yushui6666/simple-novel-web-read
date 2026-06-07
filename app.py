@@ -1,9 +1,13 @@
 from flask import Flask, render_template, request, jsonify
+import hashlib
 import re
 import os
 import sys
 import json
 from datetime import datetime
+from urllib.parse import urlparse
+
+from search import Txt80Downloader
 
 # 获取资源路径（支持打包后的环境）
 def resource_path(relative_path):
@@ -18,10 +22,27 @@ def resource_path(relative_path):
 app = Flask(__name__, 
             template_folder=resource_path('templates'))
 
-WORDS_PER_PAGE = 1000  # 每次加载字数
-_PARSE_CACHE = {}
+WORDS_PER_PAGE = 3000  # 每次加载字数（增大以减少请求数）
+_PARSE_CACHE = {}  # filepath -> {"key": (mtime_ns, size), "text": str, "chapters": [{"title": ..., "start": int, "end": int}]}
 
-# 小说文件夹路径（从exe同目录读取）
+# 模块级预编译：章节标题行匹配正则（避免每次解析时重新编译）
+_CHAPTER_LINE_RE = re.compile(
+    r"""
+    ^\s*(
+        # A) 第X章/节/回/卷/部/篇（X为阿拉伯或中文数字）
+        第\s*[\d一二三四五六七八九十百千万两零〇]+?\s*[章节回卷部篇]\s*.*?
+        |
+        # B) 卷X / 第X卷
+        (?:第?\s*[\d一二三四五六七八九十百千万两零〇]+?\s*卷)\s*.*?
+        |
+        # C) 特殊章节名（常见：序章/楔子/引子/前言/后记/番外/终章/尾声）
+        (?:序章|楔子|引子|前言|后记|番外|终章|尾声)\s*.*?
+    )\s*
+    (?:[:：\-—]{0,2}\s*)?
+    $
+    """,
+    re.VERBOSE | re.MULTILINE
+)
 if getattr(sys, 'frozen', False):
     # 打包后：从exe同目录读取
     APP_DATA_FOLDER = os.path.dirname(sys.executable)
@@ -32,6 +53,7 @@ else:
     NOVEL_FOLDER = "novel"
 
 HISTORY_FILE = os.path.join(APP_DATA_FOLDER, "reading_history.json")
+_CACHE_DIR = os.path.join(APP_DATA_FOLDER, ".novel_cache")  # 磁盘缓存目录（只存章节元数据）
 
 def _normalize_username(username):
     """Return a stable folder-safe username."""
@@ -230,78 +252,64 @@ def get_novels(username="default"):
     return novels
 
 def parse_novel(filename, username="default"):
-    """万能小说章节解析：适配常见TXT章节格式；匹配不到则按字数分页降级"""
+    """万能小说章节解析：适配常见TXT章节格式；匹配不到则按字数分页降级
+    
+    优化：缓存中只存 text + 章节偏移量（start/end），不复制每章内容，省一半内存。
+    """
+    cached = _get_parse_cache(filename, username)
+    return _build_chapters_from_cache(cached)
+
+
+def _get_parse_cache(filename, username="default"):
+    """Return normalized full text plus chapter offsets for one novel."""
     filepath = _get_novel_path(filename, username)
     if not filepath or not os.path.exists(filepath):
         raise FileNotFoundError(filename)
+    filepath = os.path.abspath(filepath)
 
     stat = os.stat(filepath)
     cache_key = (stat.st_mtime_ns, stat.st_size)
+    
+    # 1) 内存缓存命中
     cached = _PARSE_CACHE.get(filepath)
     if cached and cached["key"] == cache_key:
-        return cached["chapters"]
+        return cached
 
-    # 1) 读取文本：兼容 UTF-8 BOM / 宽松错误处理
-    with open(filepath, "r", encoding="utf-8-sig", errors="replace") as f:
-        raw = f.read()
+    # 2) 磁盘缓存命中：读文本 + 复用章节元数据（跳过昂贵正则扫描）
+    disk_cached = _load_disk_cache(filepath)
+    if disk_cached and tuple(disk_cached["key"]) == cache_key:
+        text = _read_normalized_text(filepath)
+        _PARSE_CACHE[filepath] = {"key": cache_key, "text": text, "chapters": disk_cached["chapters"]}
+        return _PARSE_CACHE[filepath]
 
-    # 2) 统一换行，去掉一些怪字符
-    text = raw.replace("\r\n", "\n").replace("\r", "\n")
-    text = text.replace("\u3000", " ").replace("\t", " ")
+    # 3) 全量解析：读取文本 + 正则扫描
+    text = _read_normalized_text(filepath)
 
-    # 3) 定义“章节标题行”匹配：覆盖 常见写法（章/节/回/卷/部/篇）
-    #    - 支持：第1章 / 第一章 / 第十回 / 卷一 / 第一卷 / 序章 / 楔子 / 后记 等
-    #    - 支持：中文冒号： / 英文冒号: / 破折号- / 空格标题
-    #    - 允许标题在同一行或下一行（见后面的“合并下一行标题”逻辑）
-    chapter_line_re = re.compile(
-        r"""
-        ^\s*(
-            # A) 第X章/节/回/卷/部/篇（X为阿拉伯或中文数字）
-            第\s*[\d一二三四五六七八九十百千万两零〇]+?\s*[章节回卷部篇]\s*.*?
-            |
-            # B) 卷X / 第X卷
-            (?:第?\s*[\d一二三四五六七八九十百千万两零〇]+?\s*卷)\s*.*?
-            |
-            # C) 特殊章节名（常见：序章/楔子/引子/前言/后记/番外/终章/尾声）
-            (?:序章|楔子|引子|前言|后记|番外|终章|尾声)\s*.*?
-        )\s*
-        (?:[:：\-—]{0,2}\s*)?
-        $
-        """,
-        re.VERBOSE | re.MULTILINE
-    )
+    # 3) 使用模块级预编译正则找到所有“章节标题行”的位置
+    matches = list(_CHAPTER_LINE_RE.finditer(text))
 
-    # 4) 找到所有“章节标题行”的位置
-    matches = list(chapter_line_re.finditer(text))
-
-    # 5) 如果一个都匹配不到：降级为“单章 + 全文”
+    # 4) 如果一个都匹配不到：降级为“单章 + 全文”
     if not matches:
-        # 也可以改成“按固定字数分成多章”，但保持你前端结构最简单：
-        chapters = [{"title": "全文", "content": text.strip()}] if text.strip() else []
-        _PARSE_CACHE[filepath] = {"key": cache_key, "chapters": chapters}
-        return chapters
+        chapters_meta = [{"title": "全文", "start": 0, "end": len(text)}] if text.strip() else []
+        _PARSE_CACHE[filepath] = {"key": cache_key, "text": text, "chapters": chapters_meta}
+        _save_disk_cache(filepath, _PARSE_CACHE[filepath])
+        return _PARSE_CACHE[filepath]
 
-    chapters = []
+    chapters_meta = []
 
-    # 6) 章节切片：每个标题到下一个标题之间为正文
+    # 5) 章节切片：每个标题到下一个标题之间为正文
     for i, m in enumerate(matches):
-        start_title = m.start()
         end_title = m.end()
         start_content = end_title
-
         end_content = matches[i + 1].start() if i + 1 < len(matches) else len(text)
 
-        title_line = text[start_title:end_title].strip()
-        content_block = text[start_content:end_content].strip("\n").strip()
+        title_line = text[m.start():end_title].strip()
 
-        # 7) 兼容：标题下一行才是真正章节名（例如：第一章：\n你想看的里面都有）
-        #    规则：若标题行本身很短 & 下一行不是空行 & 下一行不像正文（不以缩进开头/不太长）则合并
-        if content_block:
+        # 6) 兼容：标题下一行才是真正章节名（例如：第一章：\n你想看的里面都有）
+        content_block = text[start_content:end_content]
+        content_stripped = content_block.strip("\n").strip()
+        if content_stripped:
             first_line = content_block.split("\n", 1)[0].strip()
-            # 判断“下一行像标题”：
-            # - 不太长（可调，比如 <= 40）
-            # - 不包含明显句号结尾（像正文）
-            # - 不以大量缩进开头
             if (
                 len(title_line) <= 20 and
                 first_line and
@@ -309,20 +317,133 @@ def parse_novel(filename, username="default"):
                 not re.search(r"[。！？.!?]$", first_line) and
                 not re.match(r"^\s{6,}", content_block)
             ):
-                # 合并下一行作为章节名，然后从正文里删掉这一行
+                # 合并下一行作为章节名，内容偏移量跳过这一行
                 title_line = f"{title_line} {first_line}".strip()
-                content_block = content_block[len(content_block.split("\n", 1)[0]):].lstrip("\n").strip()
+                skip_len = len(content_block.split("\n", 1)[0]) + 1  # +1 for \n
+                start_content += skip_len
 
-        # 8) 过滤掉空正文（有些文件只有目录/空章）
-        if content_block:
-            chapters.append({"title": title_line, "content": content_block})
+        # 7) 计算正文的实际起始和结束（去除首尾空行）
+        actual_start = start_content
+        while actual_start < end_content and text[actual_start] in "\n\r ":
+            actual_start += 1
+        actual_end = end_content
+        while actual_end > actual_start and text[actual_end - 1] in "\n\r ":
+            actual_end -= 1
 
-    # 9) 兜底：如果过滤后空了，至少返回全文
-    if not chapters and text.strip():
-        chapters = [{"title": "全文", "content": text.strip()}]
+        if actual_start < actual_end:
+            chapters_meta.append({"title": title_line, "start": actual_start, "end": actual_end})
 
-    _PARSE_CACHE[filepath] = {"key": cache_key, "chapters": chapters}
-    return chapters
+    # 8) 兜底：如果过滤后空了，至少返回全文
+    if not chapters_meta and text.strip():
+        chapters_meta = [{"title": "全文", "start": 0, "end": len(text)}]
+
+    _PARSE_CACHE[filepath] = {"key": cache_key, "text": text, "chapters": chapters_meta}
+    _save_disk_cache(filepath, _PARSE_CACHE[filepath])  # 持久化章节元数据
+    return _PARSE_CACHE[filepath]
+
+
+def _build_chapters_from_cache(cached):
+    """从缓存的 text + 偏移量动态构建 chapters 列表（兼容旧接口）"""
+    text = cached["text"]
+    return [
+        {"title": m["title"], "content": text[m["start"]:m["end"]]}
+        for m in cached["chapters"]
+    ]
+
+
+def _read_normalized_text(filepath):
+    with open(filepath, "r", encoding="utf-8-sig", errors="replace") as f:
+        raw = f.read()
+    text = raw.replace("\r\n", "\n").replace("\r", "\n")
+    return text.replace("\u3000", " ").replace("\t", " ")
+
+
+def _get_chapter_titles(filename, username="default"):
+    cached = _get_parse_cache(filename, username)
+    return [chapter["title"] for chapter in cached["chapters"]]
+
+
+def _get_chapter_page(filename, username, idx, page):
+    cached = _get_parse_cache(filename, username)
+    chapters = cached["chapters"]
+    if idx >= len(chapters):
+        return None
+
+    chapter = chapters[idx]
+    content_len = chapter["end"] - chapter["start"]
+    total_pages = max((content_len + WORDS_PER_PAGE - 1) // WORDS_PER_PAGE, 1)
+    if page > total_pages:
+        return None
+
+    page_start = chapter["start"] + (page - 1) * WORDS_PER_PAGE
+    page_end = min(chapter["start"] + page * WORDS_PER_PAGE, chapter["end"])
+    has_next_chapter = idx + 1 < len(chapters)
+
+    return {
+        "chapter": idx,
+        "title": chapter["title"],
+        "page": page,
+        "total_pages": total_pages,
+        "content": cached["text"][page_start:page_end],
+        "has_next_chapter": has_next_chapter,
+        "next_chapter_title": chapters[idx + 1]["title"] if has_next_chapter else None,
+        "total_chapters": len(chapters),
+    }
+
+
+# ══════════════ 磁盘缓存持久化 ══════════════
+
+def _get_cache_path(filepath):
+    """返回小说文件的磁盘缓存路径（SHA256 前16位 + .json）"""
+    h = hashlib.sha256(filepath.encode()).hexdigest()[:16]
+    return os.path.join(_CACHE_DIR, f"{h}.json")
+
+def _load_disk_cache(filepath):
+    """从磁盘加载章节元数据。失败或过期返回 None。"""
+    cache_path = _get_cache_path(filepath)
+    if not os.path.exists(cache_path):
+        return None
+    try:
+        with open(cache_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict) or "key" not in data or "chapters" not in data:
+            return None
+        return data
+    except (OSError, json.JSONDecodeError):
+        return None
+
+def _save_disk_cache(filepath, cache_data):
+    """保存章节元数据到磁盘（不含 text 全文，text 从原始文件重读）。"""
+    cache_path = _get_cache_path(filepath)
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+    save_data = {
+        "key": cache_data["key"],
+        "chapters": cache_data["chapters"]
+    }
+    with open(cache_path, "w", encoding="utf-8") as f:
+        json.dump(save_data, f, ensure_ascii=False)
+
+def _remove_disk_cache(filepath):
+    """删除磁盘缓存文件"""
+    cache_path = _get_cache_path(filepath)
+    try:
+        os.remove(cache_path)
+    except OSError:
+        pass
+
+def warmup_cache(username="default"):
+    """启动时预热：后台解析所有小说填充内存缓存。"""
+    novels = get_novels(username)
+    if not novels:
+        return
+    print(f"🔥 预热缓存：正在解析 {len(novels)} 本小说...")
+    for novel in novels:
+        try:
+            parse_novel(novel["filename"], username)
+            print(f"  ✅ {novel['name']}")
+        except Exception as e:
+            print(f"  ⚠️ 跳过 {novel['name']}: {e}")
+    print("🔥 预热完成！")
 
 
 @app.route("/")
@@ -330,6 +451,82 @@ def index():
     """主页面"""
     novels = get_novels("default")
     return render_template("read.html", novels=novels) 
+
+@app.route("/download")
+def download_page():
+    """在线搜索下载页面"""
+    username = _normalize_username(request.args.get("user", "default"))
+    return render_template("download.html", user=username)
+
+def _is_allowed_txt80_url(url):
+    parsed = urlparse(url or "")
+    host = parsed.netloc.lower()
+    return parsed.scheme in {"http", "https"} and host in {"txt80.cc", "www.txt80.cc"}
+
+def _dedupe_search_results(results):
+    seen = set()
+    unique = []
+    for title, url in results:
+        if url in seen:
+            continue
+        seen.add(url)
+        unique.append({"title": title, "url": url})
+    return unique
+
+@app.route("/api/download/search")
+def api_download_search():
+    """搜索可下载的小说"""
+    keyword = (request.args.get("keyword") or "").strip()
+    if not keyword:
+        return jsonify({"error": "keyword is required"}), 400
+
+    try:
+        results = Txt80Downloader().search(keyword)
+    except Exception as exc:
+        return jsonify({"error": f"search failed: {exc}"}), 502
+
+    return jsonify({"results": _dedupe_search_results(results)})
+
+@app.route("/api/download/novel", methods=["POST"])
+def api_download_novel():
+    """下载小说到指定用户的书架"""
+    data = request.get_json(silent=True) or {}
+    detail_url = (data.get("url") or "").strip()
+    username = _normalize_username(data.get("user", "default"))
+    if not _is_allowed_txt80_url(detail_url):
+        return jsonify({"error": "only txt80.cc detail URLs are supported"}), 400
+
+    folder = _get_novel_folder(username)
+    if not folder:
+        return jsonify({"error": "invalid user"}), 400
+    os.makedirs(folder, exist_ok=True)
+
+    try:
+        result = Txt80Downloader().download(detail_url, save_dir=folder)
+    except Exception as exc:
+        return jsonify({"error": f"download failed: {exc}"}), 502
+
+    if not result:
+        return jsonify({"error": "download failed"}), 502
+
+    filename = result.get("filename") if isinstance(result, dict) else None
+    filepath = _get_novel_path(filename, username) if filename else None
+    if not filepath or not os.path.exists(filepath):
+        return jsonify({"error": "downloaded file is invalid"}), 500
+
+    abs_path = os.path.abspath(filepath)
+    _PARSE_CACHE.pop(abs_path, None)
+    _remove_disk_cache(abs_path)
+
+    return jsonify({
+        "success": True,
+        "novel": {
+            "filename": filename,
+            "name": filename.replace(".txt", "")
+        },
+        "size": os.path.getsize(filepath),
+        "user": username,
+    })
 
 @app.route("/api/novels")
 def api_novels():
@@ -359,6 +556,7 @@ def upload_novel():
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     upload.save(filepath)
     _PARSE_CACHE.pop(os.path.abspath(filepath), None)
+    _remove_disk_cache(os.path.abspath(filepath))
 
     return jsonify({
         "success": True,
@@ -382,6 +580,7 @@ def delete_novel():
 
     os.remove(filepath)
     _PARSE_CACHE.pop(os.path.abspath(filepath), None)
+    _remove_disk_cache(os.path.abspath(filepath))
     _remove_history_for_novel(novel, username)
 
     return jsonify({"success": True, "deleted": novel})
@@ -462,11 +661,11 @@ def api_chapters():
     if not os.path.exists(filepath):
         return jsonify({"error": "novel not found"}), 404
     
-    chapters = parse_novel(novel, username)
+    titles = _get_chapter_titles(novel, username)
     return jsonify({
         "novel": novel,
-        "chapters": [c["title"] for c in chapters],
-        "total_chapters": len(chapters)  # 新增：返回总章节数
+        "chapters": titles,
+        "total_chapters": len(titles)
     })
 @app.route("/debug/files")
 def debug_files():
@@ -512,32 +711,10 @@ def api_chapter():
     if not os.path.exists(filepath):
         return jsonify({"error": "novel not found"}), 404
     
-    chapters = parse_novel(novel, username)
-    
-    if idx >= len(chapters):
-        return jsonify({"error": "invalid chapter"}), 404
-
-    content = chapters[idx]["content"]
-    total_pages = (len(content) + WORDS_PER_PAGE - 1) // WORDS_PER_PAGE
-    if page > total_pages:
+    page_data = _get_chapter_page(novel, username, idx, page)
+    if page_data is None:
         return jsonify({"error": "invalid page"}), 404
-
-    start = (page - 1) * WORDS_PER_PAGE
-    end = start + WORDS_PER_PAGE
-    
-    # 判断是否有下一章
-    has_next_chapter = idx + 1 < len(chapters)
-    
-    return jsonify({
-        "chapter": idx,
-        "title": chapters[idx]["title"],
-        "page": page,
-        "total_pages": total_pages,
-        "content": content[start:end],
-        "has_next_chapter": has_next_chapter,
-        "next_chapter_title": chapters[idx + 1]["title"] if has_next_chapter else None,
-        "total_chapters": len(chapters)  # 新增：返回总章节数
-    })
+    return jsonify(page_data)
 if getattr(sys, 'frozen', False):
     NOTES_FOLDER = os.path.join(os.path.dirname(sys.executable), "notes")
 else:
@@ -601,13 +778,16 @@ def get_notes():
     return jsonify({"notes": notes_content, "exists": True})
 
 if __name__ == "__main__":
-    # 1秒后自动打开浏览器
-    
     print("=" * 50)
     print("📖 novel action")
     print("🌐 address: http://127.0.0.1:6066")
     print("📁 dir:", NOVEL_FOLDER)
+    print("💾 cache:", _CACHE_DIR)
     print("❌  Ctrl+C exit")
     print("=" * 50)
     
-    app.run(host="0.0.0.0",debug=False, port=6066)
+    # 启动时预热所有小说的章节缓存 + 磁盘缓存
+    warmup_cache("default")
+    
+    # threaded=True 允许并发请求，翻页时不会阻塞其他操作
+    app.run(host="0.0.0.0", debug=False, port=6066, threaded=True)
