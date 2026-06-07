@@ -1230,11 +1230,13 @@
     async function restoreLastReadChapter(novel, book) {
       const chapterList = Array.from(chapterSelect.options).filter(o => o.value !== "");
       let targetChapter = book && Number.isInteger(book.chapter) ? book.chapter : null;
+      let targetPage = book && Number.isInteger(book.page) && book.page >= 1 ? book.page : 1;
 
       if (targetChapter === null) {
         const storedChapter = parseInt(localStorage.getItem(chapterKey(novel)), 10);
         if (!Number.isNaN(storedChapter)) {
           targetChapter = storedChapter;
+          targetPage = 1;  // localStorage 不存页码，回退到第1页
         }
       }
 
@@ -1243,7 +1245,7 @@
       }
 
       chapterSelect.value = targetChapter;
-      await loadChapter(targetChapter, 1, false);
+      await loadChapter(targetChapter, targetPage, false);
       window.scrollTo(0, 0);
     }
 
@@ -1324,8 +1326,9 @@
       bookshelfPanel.classList.remove("show");
       await selectNovel(book.filename);
       const targetChapter = Number.isInteger(book.last_chapter) ? book.last_chapter : 0;
+      const targetPage = Number.isInteger(book.last_page) && book.last_page >= 1 ? book.last_page : 1;
       chapterSelect.value = targetChapter;
-      await loadChapter(targetChapter, 1, false);
+      await loadChapter(targetChapter, targetPage, false);
       window.scrollTo(0, 0);
     }
 
