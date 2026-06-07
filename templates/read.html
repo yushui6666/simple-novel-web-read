@@ -940,6 +940,13 @@
     let prefetchedPage = -1;
     let prefetchedNovel = "";
     let prefetchedUser = "";
+    let prefetchedPromise = null;
+    let lastAutoLoadAt = 0;
+    let pendingHistoryPayload = null;
+    let historySaveTimer = null;
+    let lastSavedHistoryKey = "";
+    const AUTO_LOAD_COOLDOWN_MS = 1200;
+    const HISTORY_SAVE_DELAY_MS = 2000;
 
     function clearPrefetchCache() {
       prefetchedData = null;
@@ -947,6 +954,7 @@
       prefetchedPage = -1;
       prefetchedNovel = "";
       prefetchedUser = "";
+      prefetchedPromise = null;
     }
 
     // 初始化用户名输入框
@@ -1298,8 +1306,19 @@
         loading = true;
         loadingIndicator.style.display = "block";
         try {
-          const res = await fetch(`/api/chapter?user=${encodeURIComponent(currentUser)}&novel=${encodeURIComponent(currentNovel)}&id=${chapter}&page=${page}`);
-          data = await res.json();
+          if (
+            prefetchedPromise &&
+            prefetchedChapter === chapter &&
+            prefetchedPage === page &&
+            prefetchedNovel === currentNovel &&
+            prefetchedUser === currentUser
+          ) {
+            data = await prefetchedPromise;
+            clearPrefetchCache();
+          } else {
+            const res = await fetch(`/api/chapter?user=${encodeURIComponent(currentUser)}&novel=${encodeURIComponent(currentNovel)}&id=${chapter}&page=${page}`);
+            data = await res.json();
+          }
         } catch (err) {
           console.error("加载失败:", err);
           pageInfo.textContent = "⚠️ 加载失败，请重试";
@@ -1307,6 +1326,13 @@
           loadingIndicator.style.display = "none";
           return;
         }
+      }
+
+      if (!data) {
+        pageInfo.textContent = "⚠️ 加载失败，请重试";
+        loading = false;
+        loadingIndicator.style.display = "none";
+        return;
       }
 
       // 渲染内容
@@ -1371,16 +1397,25 @@
       ) return;
 
       try {
-        const res = await fetch(`/api/chapter?user=${encodeURIComponent(currentUser)}&novel=${encodeURIComponent(currentNovel)}&id=${nextChapter}&page=${nextPage}`);
-        if (res.ok) {
-          prefetchedData = await res.json();
-          prefetchedChapter = nextChapter;
-          prefetchedPage = nextPage;
-          prefetchedNovel = currentNovel;
-          prefetchedUser = currentUser;
+        const requestNovel = currentNovel;
+        const requestUser = currentUser;
+        prefetchedChapter = nextChapter;
+        prefetchedPage = nextPage;
+        prefetchedNovel = requestNovel;
+        prefetchedUser = requestUser;
+        prefetchedPromise = fetch(`/api/chapter?user=${encodeURIComponent(requestUser)}&novel=${encodeURIComponent(requestNovel)}&id=${nextChapter}&page=${nextPage}`)
+          .then(async (res) => {
+            if (!res.ok) return null;
+            return res.json();
+          });
+
+        const data = await prefetchedPromise;
+        if (data && currentNovel === requestNovel && currentUser === requestUser) {
+          prefetchedData = data;
         }
       } catch (e) {
         // 预加载失败静默处理
+        clearPrefetchCache();
       }
     }
 
@@ -1390,24 +1425,50 @@
       pageInfo.textContent = info;
     }
 
-    async function saveReadingHistory(data) {
+    function saveReadingHistory(data) {
       if (!currentNovel || currentChapter < 0 || totalChapters < 1) return;
+      pendingHistoryPayload = {
+        novel: currentNovel,
+        chapter: currentChapter,
+        chapter_title: data.title || "",
+        page: currentPage,
+        total_pages: totalPages,
+        total_chapters: totalChapters,
+        user: currentUser
+      };
+      const nextKey = JSON.stringify(pendingHistoryPayload);
+      if (nextKey === lastSavedHistoryKey) return;
+      clearTimeout(historySaveTimer);
+      historySaveTimer = setTimeout(() => {
+        flushReadingHistory();
+      }, HISTORY_SAVE_DELAY_MS);
+    }
+
+    async function flushReadingHistory(useBeacon=false) {
+      if (!pendingHistoryPayload) return;
+      const payload = pendingHistoryPayload;
+      const historyKey = JSON.stringify(payload);
+      if (historyKey === lastSavedHistoryKey) return;
+      pendingHistoryPayload = null;
+      clearTimeout(historySaveTimer);
+
       try {
+        if (useBeacon && navigator.sendBeacon) {
+          const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+          if (navigator.sendBeacon("/api/reading_history", blob)) {
+            lastSavedHistoryKey = historyKey;
+            return;
+          }
+        }
         await fetch("/api/reading_history", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            novel: currentNovel,
-            chapter: currentChapter,
-            chapter_title: data.title || "",
-            page: currentPage,
-            total_pages: totalPages,
-            total_chapters: totalChapters,
-            user: currentUser
-          })
+          body: JSON.stringify(payload)
         });
+        lastSavedHistoryKey = historyKey;
       } catch (err) {
         console.warn("保存阅读历史失败:", err);
+        pendingHistoryPayload = payload;
       }
     }
 
@@ -1548,17 +1609,21 @@
     chapterSelect.onchange = () => {
       const idx = parseInt(chapterSelect.value);
       if (isNaN(idx)) return;
+      clearPrefetchCache();
       loadChapter(idx, 1, false);
       window.scrollTo(0, 0);
     };
 
     window.addEventListener("scroll", () => {
       if (!autoLoadEnabled || loading || currentChapter < 0) return;
+      const now = Date.now();
+      if (now - lastAutoLoadAt < AUTO_LOAD_COOLDOWN_MS) return;
       const scrollBottom = window.innerHeight + window.scrollY;
       const documentHeight = document.body.offsetHeight;
       
       // 距底部 500px 触发加载（配合预加载，翻页更丝滑）
       if (scrollBottom >= documentHeight - 500) {
+        lastAutoLoadAt = now;
         if (currentPage < totalPages) {
           loadChapter(currentChapter, currentPage + 1, true);
         } else {
@@ -1569,6 +1634,10 @@
           }
         }
       }
+    });
+
+    window.addEventListener("beforeunload", () => {
+      flushReadingHistory(true);
     });
 
     fontMinus.onclick = () => {
