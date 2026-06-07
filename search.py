@@ -5,6 +5,15 @@ import re
 from urllib.parse import urljoin, unquote
 
 
+def normalize_username(username):
+    """Return a folder-safe user name for per-user bookshelves."""
+    if not username or not isinstance(username, str):
+        return "yushui"
+    username = username.strip() or "yushui"
+    username = re.sub(r"[^\w\u4e00-\u9fff.-]+", "_", username, flags=re.UNICODE).strip("._")
+    return (username or "yushui")[:80]
+
+
 class Txt80Downloader:
     """八零电子书 (txt80.cc) TXT小说下载器"""
 
@@ -19,6 +28,10 @@ class Txt80Downloader:
         }
         self.session = requests.Session()
         self.default_save_dir = 'novel'
+
+    def get_user_save_dir(self, username):
+        """Return the per-user bookshelf directory used by the reader."""
+        return os.path.join(self.default_save_dir, normalize_username(username))
 
     def get_page(self, url, method='get', data=None):
         """获取网页内容"""
@@ -221,7 +234,13 @@ class Txt80Downloader:
             print(f"📦 文件大小: {os.path.getsize(save_path) / 1024 / 1024:.2f} MB")
 
             self.fix_encoding(save_path)
-            return True
+            return {
+                "success": True,
+                "title": title,
+                "filename": filename,
+                "path": os.path.abspath(save_path),
+                "size": os.path.getsize(save_path),
+            }
 
         except Exception as e:
             print(f"\n❌ 下载失败: {e}")
@@ -275,7 +294,9 @@ def main():
     print("=" * 60)
 
     downloader = Txt80Downloader()
-    print(f"💾 默认下载目录: {downloader.default_save_dir}")
+    username = input("\n请输入要保存到的用户书架 (默认 yushui): ").strip() or "yushui"
+    save_dir = downloader.get_user_save_dir(username)
+    print(f"💾 下载目录: {save_dir}")
 
     print("\n请选择操作方式:")
     print("1. 搜索小说名称并下载")
@@ -319,14 +340,14 @@ def main():
             except Exception:
                 choice_idx = 1
 
-        downloader.download(unique[choice_idx - 1][1])
+        downloader.download(unique[choice_idx - 1][1], save_dir=save_dir)
 
     elif choice == "2":
         detail_url = input("\n请输入小说详情页URL: ").strip()
         if not detail_url:
             print("❌ URL不能为空！")
             return
-        downloader.download(detail_url)
+        downloader.download(detail_url, save_dir=save_dir)
 
     else:
         print("❌ 无效选择！")
