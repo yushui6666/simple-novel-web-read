@@ -3,6 +3,7 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 class ReadingHistoryTest(unittest.TestCase):
@@ -125,6 +126,101 @@ class ReadingHistoryTest(unittest.TestCase):
                     delattr(app_module, "HISTORY_FILE")
                 else:
                     app_module.HISTORY_FILE = old_history_file
+                app_module._PARSE_CACHE.clear()
+
+    def test_chapter_metadata_disk_cache_is_reused(self):
+        import app as app_module
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            novel_dir = temp_path / "novel"
+            novel_dir.mkdir()
+            novel_path = novel_dir / "default" / "缓存小说.txt"
+            novel_path.parent.mkdir()
+            novel_path.write_text("第一章 开始\n第一页正文\n第二章 继续\n第二页正文", encoding="utf-8")
+
+            old_novel_folder = app_module.NOVEL_FOLDER
+            old_cache_dir = getattr(app_module, "_CACHE_DIR", None)
+            app_module.NOVEL_FOLDER = str(novel_dir)
+            app_module._CACHE_DIR = str(temp_path / ".novel_cache")
+            app_module._PARSE_CACHE.clear()
+
+            try:
+                first = app_module._get_chapter_titles("缓存小说.txt", "default")
+                self.assertEqual(first, ["第一章 开始", "第二章 继续"])
+
+                app_module._PARSE_CACHE.clear()
+                cached = app_module._load_disk_cache(str(novel_path))
+                self.assertIsNotNone(cached)
+                self.assertEqual(len(cached["chapters"]), 2)
+
+                original_chapter_re = app_module._CHAPTER_LINE_RE
+                class FailingChapterRegex:
+                    def finditer(self, text):
+                        raise AssertionError("disk cache should skip chapter regex scanning")
+
+                try:
+                    app_module._CHAPTER_LINE_RE = FailingChapterRegex()
+                    second = app_module._get_chapter_titles("缓存小说.txt", "default")
+                finally:
+                    app_module._CHAPTER_LINE_RE = original_chapter_re
+
+                self.assertEqual(second, first)
+            finally:
+                app_module.NOVEL_FOLDER = old_novel_folder
+                if old_cache_dir is None:
+                    delattr(app_module, "_CACHE_DIR")
+                else:
+                    app_module._CACHE_DIR = old_cache_dir
+                app_module._PARSE_CACHE.clear()
+
+    def test_web_download_saves_into_requested_user_bookshelf(self):
+        import app as app_module
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            novel_dir = temp_path / "novel"
+            novel_dir.mkdir()
+
+            old_novel_folder = app_module.NOVEL_FOLDER
+            old_cache_dir = getattr(app_module, "_CACHE_DIR", None)
+            app_module.NOVEL_FOLDER = str(novel_dir)
+            app_module._CACHE_DIR = str(temp_path / ".novel_cache")
+            app_module._PARSE_CACHE.clear()
+
+            class FakeDownloader:
+                def download(self, detail_url, save_dir=None):
+                    path = Path(save_dir) / "下载小说.txt"
+                    path.write_text("第一章 开始\n下载正文", encoding="utf-8")
+                    return {
+                        "success": True,
+                        "title": "下载小说",
+                        "filename": path.name,
+                        "path": str(path),
+                        "size": path.stat().st_size,
+                    }
+
+            try:
+                client = app_module.app.test_client()
+                with mock.patch.object(app_module, "Txt80Downloader", return_value=FakeDownloader()):
+                    response = client.post("/api/download/novel", json={
+                        "user": "alice",
+                        "url": "https://www.txt80.cc/example/txt123.html",
+                    })
+
+                self.assertEqual(response.status_code, 200)
+                data = response.get_json()
+                self.assertTrue(data["success"])
+                self.assertEqual(data["user"], "alice")
+                self.assertEqual(data["novel"]["filename"], "下载小说.txt")
+                self.assertTrue((novel_dir / "alice" / "下载小说.txt").exists())
+                self.assertFalse((novel_dir / "default" / "下载小说.txt").exists())
+            finally:
+                app_module.NOVEL_FOLDER = old_novel_folder
+                if old_cache_dir is None:
+                    delattr(app_module, "_CACHE_DIR")
+                else:
+                    app_module._CACHE_DIR = old_cache_dir
                 app_module._PARSE_CACHE.clear()
 
 
